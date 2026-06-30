@@ -1,7 +1,7 @@
 """לוגיקת ליבה משותפת ל-CLI ולממשק ה-Streamlit: זיהוי, הסתרה ושחזור של PII בקובצי אקסל."""
 import re
 
-from detector import has_force_encode_keyword, is_black_fill_white_font
+from detector import has_force_encode_keyword, is_black_fill_white_font, strip_quoted_force_encode_keyword
 from mapping import CodeMapper
 
 
@@ -33,6 +33,12 @@ def anonymize_workbook(wb, manual_col_types=None):
             continue
         col_types = detect_force_encode_columns(ws)
         col_types.update(manual_col_types.get(ws.title, {}))
+
+        # אם מילת המפתח "תקודד" מופיעה במרכאות בכותרת, מסירים אותה ומשאירים
+        # רק את שאר הכותרת
+        for col_idx in col_types:
+            header_cell = ws.cell(row=1, column=col_idx)
+            header_cell.value = strip_quoted_force_encode_keyword(header_cell.value)
 
         for row in range(2, ws.max_row + 1):
             for col_idx, pii_type in col_types.items():

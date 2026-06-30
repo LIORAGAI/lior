@@ -1,4 +1,8 @@
 """זיהוי עמודות שיש להצפין בקובץ אקסל, לפי סימון ידני בכותרת."""
+import re
+
+# המילה "תקודד" עטופה במרכאות (רגילות או מעוצבות), עם רווחים אופציונליים סביבה
+_QUOTED_KEYWORD_RE = re.compile(r'\s*["“”״]תקודד["“”״]\s*')
 
 
 def has_force_encode_keyword(column_name) -> bool:
@@ -7,6 +11,16 @@ def has_force_encode_keyword(column_name) -> bool:
     if column_name is None:
         return False
     return "תקודד" in str(column_name)
+
+
+def strip_quoted_force_encode_keyword(column_name):
+    """אם הכותרת מכילה את המילה "תקודד" בתוך מרכאות, מחזיר את הכותרת בלי המילה
+    (ובלי המרכאות סביבה). אם אין התאמה במרכאות, מחזיר את הכותרת המקורית."""
+    if column_name is None:
+        return column_name
+    text = str(column_name)
+    cleaned = _QUOTED_KEYWORD_RE.sub(" ", text).strip()
+    return cleaned if cleaned else text
 
 
 def _is_black(color) -> bool:
