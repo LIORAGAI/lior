@@ -12,7 +12,7 @@ from io import BytesIO
 import openpyxl
 import streamlit as st
 
-from core import anonymize_workbook, detect_black_marked_columns, detect_columns, restore_workbook
+from core import anonymize_workbook, detect_columns, detect_force_encode_columns, restore_workbook
 from mapping import CodeMapper
 
 st.set_page_config(page_title="הסתרת מידע מזהה באקסל", layout="centered")
@@ -25,7 +25,8 @@ with tab_anon:
     st.subheader("שלב 1: הסתרת מידע מזהה")
     st.caption(
         "הזיהוי אוטומטי לפי כותרות עמודות ותוכן התא. אם משהו לא זוהה - "
-        "צבעו את העמודה/התא ברקע שחור (מילוי שחור) באקסל לפני ההעלאה."
+        "הוסיפו למילת \"תקודד\" כותרת העמודה (למשל: \"שם פרטי תקודד\") כדי להצפין "
+        "אותה אוטומטית, ולהעלות שוב."
     )
     uploaded = st.file_uploader("העלה קובץ אקסל מקורי", type=["xlsx"], key="anon_upload")
 
@@ -43,10 +44,10 @@ with tab_anon:
                 )
                 st.info(f"גיליון **{ws.title}** - זוהו אוטומטית: {names}")
 
-            black_marked = detect_black_marked_columns(ws)
-            if black_marked:
-                names = ", ".join(f"'{ws.cell(row=1, column=c).value}'" for c in black_marked)
-                st.info(f"גיליון **{ws.title}** - עמודות מסומנות ידנית (צביעה שחורה) להסתרה: {names}")
+            force_encoded = detect_force_encode_columns(ws)
+            if force_encoded:
+                names = ", ".join(f"'{ws.cell(row=1, column=c).value}'" for c in force_encoded)
+                st.info(f"גיליון **{ws.title}** - עמודות מסומנות ידנית (מילת המפתח \"תקודד\") להצפנה: {names}")
 
         if st.button("בצע הסתרה", type="primary"):
             mapper = anonymize_workbook(wb)
