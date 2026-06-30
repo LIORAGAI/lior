@@ -12,7 +12,7 @@ from io import BytesIO
 import openpyxl
 import streamlit as st
 
-from core import anonymize_workbook, detect_columns, detect_force_encode_columns, restore_workbook
+from core import anonymize_workbook, detect_force_encode_columns, restore_workbook
 from mapping import CodeMapper
 
 st.set_page_config(page_title="הסתרת מידע מזהה באקסל", layout="centered")
@@ -24,9 +24,8 @@ tab_anon, tab_restore = st.tabs(["1. הסתרת מידע לפני העלאה", "
 with tab_anon:
     st.subheader("שלב 1: הסתרת מידע מזהה")
     st.caption(
-        "הזיהוי אוטומטי לפי כותרות עמודות ותוכן התא. אם משהו לא זוהה - "
-        "הוסיפו למילת \"תקודד\" כותרת העמודה (למשל: \"שם פרטי תקודד\") כדי להצפין "
-        "אותה אוטומטית, ולהעלות שוב."
+        "הוסיפו את המילה \"תקודד\" (עם או בלי מרכאות) לכותרת כל עמודה שמכילה מידע "
+        "מזהה (למשל: \"שם פרטי תקודד\") - כל הערכים בעמודה הזו יוצפנו אוטומטית."
     )
     uploaded = st.file_uploader("העלה קובץ אקסל מקורי", type=["xlsx"], key="anon_upload")
 
@@ -37,13 +36,6 @@ with tab_anon:
         for ws in wb.worksheets:
             if ws.max_row < 2:
                 continue
-            auto_detected = detect_columns(ws)
-            if auto_detected:
-                names = ", ".join(
-                    f"'{ws.cell(row=1, column=c).value}' ({t})" for c, t in auto_detected.items()
-                )
-                st.info(f"גיליון **{ws.title}** - זוהו אוטומטית: {names}")
-
             force_encoded = detect_force_encode_columns(ws)
             if force_encoded:
                 names = ", ".join(f"'{ws.cell(row=1, column=c).value}'" for c in force_encoded)

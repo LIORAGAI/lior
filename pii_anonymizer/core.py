@@ -1,26 +1,14 @@
 """לוגיקת ליבה משותפת ל-CLI ולממשק ה-Streamlit: זיהוי, הסתרה ושחזור של PII בקובצי אקסל."""
 import re
 
-from detector import classify_cell_content, has_force_encode_keyword, match_column_keyword
+from detector import has_force_encode_keyword
 from mapping import CodeMapper
-
-
-def detect_columns(ws):
-    """מחזיר dict: אינדקס עמודה -> סוג PII, על סמך שם הכותרת (שורה ראשונה)."""
-    detected = {}
-    for col_idx, cell in enumerate(ws[1], start=1):
-        if cell.value is None:
-            continue
-        pii_type = match_column_keyword(cell.value)
-        if pii_type:
-            detected[col_idx] = pii_type
-    return detected
 
 
 def detect_force_encode_columns(ws):
     """
     מחזיר dict: אינדקס עמודה -> "GENERIC" עבור עמודות שכותרתן מכילה את מילת המפתח
-    "תקודד" - סימון ידני של המשתמש שיש להצפין את כל העמודה, גם אם לא זוהתה אוטומטית.
+    "תקודד" (עם או בלי מרכאות) - סימון ידני של המשתמש שיש להצפין את כל העמודה.
     """
     marked = {}
     for col_idx, cell in enumerate(ws[1], start=1):
@@ -31,9 +19,10 @@ def detect_force_encode_columns(ws):
 
 def anonymize_workbook(wb, manual_col_types=None):
     """
-    מסתיר PII בכל הגיליונות של wb (in-place) ומחזירה את ה-CodeMapper שנוצר.
+    מסתיר את כל העמודות המסומנות במילת המפתח "תקודד" בכותרת, בכל הגיליונות של wb
+    (in-place), ומחזירה את ה-CodeMapper שנוצר.
     manual_col_types: dict אופציונלי {sheet_title: {col_idx: pii_type}} עבור עמודות
-    שאושרו ידנית (למשל דרך ממשק משתמש), בנוסף לזיהוי האוטומטי.
+    שאושרו ידנית (למשל דרך ממשק משתמש), בנוסף לסימון "תקודד".
     """
     manual_col_types = manual_col_types or {}
     mapper = CodeMapper()
@@ -41,8 +30,7 @@ def anonymize_workbook(wb, manual_col_types=None):
     for ws in wb.worksheets:
         if ws.max_row < 2:
             continue
-        col_types = detect_columns(ws)
-        col_types.update(detect_force_encode_columns(ws))
+        col_types = detect_force_encode_columns(ws)
         col_types.update(manual_col_types.get(ws.title, {}))
 
         for row in range(2, ws.max_row + 1):
@@ -51,18 +39,6 @@ def anonymize_workbook(wb, manual_col_types=None):
                 if cell.value is None or str(cell.value).strip() == "":
                     continue
                 cell.value = mapper.encode(pii_type, str(cell.value))
-
-        # זיהוי תוכן מזהה גם בעמודות שלא סומנו (למשל ת.ז שמופיעה בעמודה ללא כותרת מתאימה)
-        for row in range(2, ws.max_row + 1):
-            for col_idx in range(1, ws.max_column + 1):
-                if col_idx in col_types:
-                    continue
-                cell = ws.cell(row=row, column=col_idx)
-                if cell.value is None:
-                    continue
-                pii_type = classify_cell_content(cell.value)
-                if pii_type:
-                    cell.value = mapper.encode(pii_type, str(cell.value))
 
     return mapper
 
