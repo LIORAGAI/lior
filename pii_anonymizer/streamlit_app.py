@@ -24,8 +24,9 @@ tab_anon, tab_restore = st.tabs(["1. הסתרת מידע לפני העלאה", "
 with tab_anon:
     st.subheader("שלב 1: הסתרת מידע מזהה")
     st.caption(
-        "הוסיפו את המילה \"תקודד\" (עם או בלי מרכאות) לכותרת כל עמודה שמכילה מידע "
-        "מזהה (למשל: \"שם פרטי תקודד\") - כל הערכים בעמודה הזו יוצפנו אוטומטית."
+        "סמנו עמודה להצפנה בשתי דרכים אפשריות: הוסיפו את המילה \"תקודד\" (עם או בלי "
+        "מרכאות) לכותרת, או צבעו את תא הכותרת במילוי רקע שחור עם גופן לבן. "
+        "כל הערכים בעמודה המסומנת יוצפנו אוטומטית."
     )
     uploaded = st.file_uploader("העלה קובץ אקסל מקורי", type=["xlsx"], key="anon_upload")
 
@@ -39,7 +40,7 @@ with tab_anon:
             force_encoded = detect_force_encode_columns(ws)
             if force_encoded:
                 names = ", ".join(f"'{ws.cell(row=1, column=c).value}'" for c in force_encoded)
-                st.info(f"גיליון **{ws.title}** - עמודות מסומנות ידנית (מילת המפתח \"תקודד\") להצפנה: {names}")
+                st.info(f"גיליון **{ws.title}** - עמודות מסומנות ידנית להצפנה: {names}")
 
         if st.button("בצע הסתרה", type="primary"):
             mapper = anonymize_workbook(wb)

@@ -1,28 +1,29 @@
 """לוגיקת ליבה משותפת ל-CLI ולממשק ה-Streamlit: זיהוי, הסתרה ושחזור של PII בקובצי אקסל."""
 import re
 
-from detector import has_force_encode_keyword
+from detector import has_force_encode_keyword, is_black_fill_white_font
 from mapping import CodeMapper
 
 
 def detect_force_encode_columns(ws):
     """
-    מחזיר dict: אינדקס עמודה -> "GENERIC" עבור עמודות שכותרתן מכילה את מילת המפתח
-    "תקודד" (עם או בלי מרכאות) - סימון ידני של המשתמש שיש להצפין את כל העמודה.
+    מחזיר dict: אינדקס עמודה -> "GENERIC" עבור עמודות שהכותרת שלהן מסומנת ידנית
+    להצפנה - או שמכילה את מילת המפתח "תקודד" (עם או בלי מרכאות), או שצבועה
+    במילוי רקע שחור עם גופן לבן.
     """
     marked = {}
     for col_idx, cell in enumerate(ws[1], start=1):
-        if has_force_encode_keyword(cell.value):
+        if has_force_encode_keyword(cell.value) or is_black_fill_white_font(cell):
             marked[col_idx] = "GENERIC"
     return marked
 
 
 def anonymize_workbook(wb, manual_col_types=None):
     """
-    מסתיר את כל העמודות המסומנות במילת המפתח "תקודד" בכותרת, בכל הגיליונות של wb
-    (in-place), ומחזירה את ה-CodeMapper שנוצר.
+    מסתיר את כל העמודות המסומנות ידנית להצפנה (כותרת "תקודד" או צביעה שחורה
+    עם גופן לבן), בכל הגיליונות של wb (in-place), ומחזירה את ה-CodeMapper שנוצר.
     manual_col_types: dict אופציונלי {sheet_title: {col_idx: pii_type}} עבור עמודות
-    שאושרו ידנית (למשל דרך ממשק משתמש), בנוסף לסימון "תקודד".
+    שאושרו ידנית (למשל דרך ממשק משתמש), בנוסף לסימון האוטומטי.
     """
     manual_col_types = manual_col_types or {}
     mapper = CodeMapper()
