@@ -45,6 +45,17 @@ def match_column_keyword(column_name: str):
     return None
 
 
+def is_black_fill(cell) -> bool:
+    """בודק אם לתא יש צביעת רקע שחורה - סימון ידני של המשתמש שיש להסתיר את התא."""
+    fill = cell.fill
+    if fill is None or fill.fill_type != "solid":
+        return False
+    color = fill.fgColor
+    if color is None or color.type != "rgb" or not isinstance(color.rgb, str):
+        return False
+    return color.rgb.upper().endswith("000000")
+
+
 def classify_cell_content(value) -> str | None:
     """מנסה לזהות סוג PII לפי תוכן התא בלבד (ללא תלות בכותרת)."""
     if value is None:

@@ -1,7 +1,7 @@
 """לוגיקת ליבה משותפת ל-CLI ולממשק ה-Streamlit: זיהוי, הסתרה ושחזור של PII בקובצי אקסל."""
 import re
 
-from detector import classify_cell_content, match_column_keyword
+from detector import classify_cell_content, is_black_fill, match_column_keyword
 from mapping import CodeMapper
 
 
@@ -15,6 +15,20 @@ def detect_columns(ws):
         if pii_type:
             detected[col_idx] = pii_type
     return detected
+
+
+def detect_black_marked_columns(ws):
+    """
+    מחזיר dict: אינדקס עמודה -> "GENERIC" עבור עמודות שכל התאים בהן (כותרת ונתונים)
+    צבועים ברקע שחור - סימון ידני של המשתמש שיש להסתיר את כל העמודה.
+    """
+    marked = {}
+    for col_idx in range(1, ws.max_column + 1):
+        cells = [ws.cell(row=r, column=col_idx) for r in range(1, ws.max_row + 1)]
+        non_empty = [c for c in cells if c.value is not None and str(c.value).strip() != ""]
+        if non_empty and all(is_black_fill(c) for c in non_empty):
+            marked[col_idx] = "GENERIC"
+    return marked
 
 
 def find_ambiguous_columns(ws, already_detected):
@@ -51,6 +65,7 @@ def anonymize_workbook(wb, manual_col_types=None):
         if ws.max_row < 2:
             continue
         col_types = detect_columns(ws)
+        col_types.update(detect_black_marked_columns(ws))
         col_types.update(manual_col_types.get(ws.title, {}))
 
         for row in range(2, ws.max_row + 1):
@@ -60,7 +75,8 @@ def anonymize_workbook(wb, manual_col_types=None):
                     continue
                 cell.value = mapper.encode(pii_type, str(cell.value))
 
-        # זיהוי תוכן מזהה גם בעמודות שלא סומנו (למשל ת.ז שמופיעה בעמודה ללא כותרת מתאימה)
+        # זיהוי תוכן מזהה גם בעמודות שלא סומנו (למשל ת.ז שמופיעה בעמודה ללא כותרת מתאימה),
+        # וגם תאים בודדים שצבועים ברקע שחור ידנית גם אם שאר העמודה לא צבועה
         for row in range(2, ws.max_row + 1):
             for col_idx in range(1, ws.max_column + 1):
                 if col_idx in col_types:
@@ -69,6 +85,8 @@ def anonymize_workbook(wb, manual_col_types=None):
                 if cell.value is None:
                     continue
                 pii_type = classify_cell_content(cell.value)
+                if pii_type is None and is_black_fill(cell):
+                    pii_type = "GENERIC"
                 if pii_type:
                     cell.value = mapper.encode(pii_type, str(cell.value))
 

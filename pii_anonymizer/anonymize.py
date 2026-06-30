@@ -11,7 +11,7 @@ import argparse
 
 import openpyxl
 
-from core import anonymize_workbook, find_ambiguous_columns, detect_columns
+from core import anonymize_workbook, detect_black_marked_columns, detect_columns, find_ambiguous_columns
 
 
 def ask_user_about_columns(ws, ambiguous_columns):
@@ -35,7 +35,9 @@ def anonymize(in_path: str, out_path: str, mapping_path: str, auto_yes: bool):
         for ws in wb.worksheets:
             if ws.max_row < 2:
                 continue
-            ambiguous = find_ambiguous_columns(ws, detect_columns(ws))
+            already_detected = detect_columns(ws)
+            already_detected.update(detect_black_marked_columns(ws))
+            ambiguous = find_ambiguous_columns(ws, already_detected)
             if ambiguous:
                 manual_col_types[ws.title] = ask_user_about_columns(ws, ambiguous)
 

@@ -12,7 +12,13 @@ from io import BytesIO
 import openpyxl
 import streamlit as st
 
-from core import anonymize_workbook, detect_columns, find_ambiguous_columns, restore_workbook
+from core import (
+    anonymize_workbook,
+    detect_black_marked_columns,
+    detect_columns,
+    find_ambiguous_columns,
+    restore_workbook,
+)
 from mapping import CodeMapper
 
 PII_TYPES = ["GENERIC", "NAME", "COMPANY_NAME", "ID", "COMPANY_ID", "PHONE", "EMAIL", "ADDRESS"]
@@ -42,7 +48,12 @@ with tab_anon:
                 )
                 st.info(f"גיליון **{ws.title}** - זוהו אוטומטית: {names}")
 
-            ambiguous = find_ambiguous_columns(ws, auto_detected)
+            black_marked = detect_black_marked_columns(ws)
+            if black_marked:
+                names = ", ".join(f"'{ws.cell(row=1, column=c).value}'" for c in black_marked)
+                st.info(f"גיליון **{ws.title}** - עמודות מסומנות ידנית (צביעה שחורה) להסתרה: {names}")
+
+            ambiguous = find_ambiguous_columns(ws, {**auto_detected, **black_marked})
             if ambiguous:
                 st.markdown(f"**גיליון '{ws.title}' - עמודות לא ודאיות, אנא בדוק:**")
                 sheet_manual = {}
