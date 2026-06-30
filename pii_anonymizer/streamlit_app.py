@@ -12,16 +12,8 @@ from io import BytesIO
 import openpyxl
 import streamlit as st
 
-from core import (
-    anonymize_workbook,
-    detect_black_marked_columns,
-    detect_columns,
-    find_ambiguous_columns,
-    restore_workbook,
-)
+from core import anonymize_workbook, detect_black_marked_columns, detect_columns, restore_workbook
 from mapping import CodeMapper
-
-PII_TYPES = ["GENERIC", "NAME", "COMPANY_NAME", "ID", "COMPANY_ID", "PHONE", "EMAIL", "ADDRESS"]
 
 st.set_page_config(page_title="הסתרת מידע מזהה באקסל", layout="centered")
 st.title("הסתרה ושחזור של מידע מזהה (PII) בקבצי אקסל")
@@ -31,12 +23,15 @@ tab_anon, tab_restore = st.tabs(["1. הסתרת מידע לפני העלאה", "
 
 with tab_anon:
     st.subheader("שלב 1: הסתרת מידע מזהה")
+    st.caption(
+        "הזיהוי אוטומטי לפי כותרות עמודות ותוכן התא. אם משהו לא זוהה - "
+        "צבעו את העמודה/התא ברקע שחור (מילוי שחור) באקסל לפני ההעלאה."
+    )
     uploaded = st.file_uploader("העלה קובץ אקסל מקורי", type=["xlsx"], key="anon_upload")
 
     if uploaded:
         file_bytes = uploaded.getvalue()
         wb = openpyxl.load_workbook(BytesIO(file_bytes))
-        manual_col_types: dict[str, dict[int, str]] = {}
 
         for ws in wb.worksheets:
             if ws.max_row < 2:
@@ -53,28 +48,8 @@ with tab_anon:
                 names = ", ".join(f"'{ws.cell(row=1, column=c).value}'" for c in black_marked)
                 st.info(f"גיליון **{ws.title}** - עמודות מסומנות ידנית (צביעה שחורה) להסתרה: {names}")
 
-            ambiguous = find_ambiguous_columns(ws, {**auto_detected, **black_marked})
-            if ambiguous:
-                st.markdown(f"**גיליון '{ws.title}' - עמודות לא ודאיות, אנא בדוק:**")
-                sheet_manual = {}
-                for col_idx, header, sample in ambiguous:
-                    c1, c2 = st.columns([3, 1])
-                    with c1:
-                        hide = st.checkbox(
-                            f"'{header}' - דוגמאות: {sample}",
-                            key=f"hide_{uploaded.name}_{ws.title}_{col_idx}",
-                        )
-                    with c2:
-                        pii_type = st.selectbox(
-                            "סוג", PII_TYPES, key=f"type_{uploaded.name}_{ws.title}_{col_idx}"
-                        )
-                    if hide:
-                        sheet_manual[col_idx] = pii_type
-                if sheet_manual:
-                    manual_col_types[ws.title] = sheet_manual
-
         if st.button("בצע הסתרה", type="primary"):
-            mapper = anonymize_workbook(wb, manual_col_types)
+            mapper = anonymize_workbook(wb)
 
             out_buf = BytesIO()
             wb.save(out_buf)

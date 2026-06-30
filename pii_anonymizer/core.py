@@ -31,27 +31,6 @@ def detect_black_marked_columns(ws):
     return marked
 
 
-def find_ambiguous_columns(ws, already_detected):
-    """מאתר עמודות טקסט עם ערכים ייחודיים ברובם, שלא זוהו לפי כותרת - מועמדות לבדיקה ידנית."""
-    ambiguous = []
-    if ws.max_row - 1 <= 0:
-        return ambiguous
-    for col_idx in range(1, ws.max_column + 1):
-        if col_idx in already_detected:
-            continue
-        header = ws.cell(row=1, column=col_idx).value
-        values = [ws.cell(row=r, column=col_idx).value for r in range(2, ws.max_row + 1)]
-        text_values = [v for v in values if isinstance(v, str) and v.strip()]
-        if not text_values:
-            continue
-        uniqueness = len(set(text_values)) / len(text_values)
-        # ערכי טקסט עם גיוון גבוה (לא קטגוריאליים) עשויים להיות מזהים אישיים
-        if uniqueness > 0.6 and len(text_values) >= 3:
-            sample = [v for v in text_values[:3]]
-            ambiguous.append((col_idx, header, sample))
-    return ambiguous
-
-
 def anonymize_workbook(wb, manual_col_types=None):
     """
     מסתיר PII בכל הגיליונות של wb (in-place) ומחזירה את ה-CodeMapper שנוצר.
