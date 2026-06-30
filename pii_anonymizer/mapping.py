@@ -33,24 +33,32 @@ class CodeMapper:
         self._code_to_value[code] = value
         return code
 
-    def save(self, path: str):
-        data = {
+    def to_dict(self) -> dict:
+        return {
             "entries": [
                 {"type": t, "original": v, "code": c}
                 for (t, v), c in self._value_to_code.items()
             ]
         }
-        Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def to_json_str(self) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=2)
+
+    def save(self, path: str):
+        Path(path).write_text(self.to_json_str(), encoding="utf-8")
 
     @classmethod
-    def load(cls, path: str) -> "CodeMapper":
+    def from_dict(cls, data: dict) -> "CodeMapper":
         mapper = cls()
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
         for entry in data["entries"]:
             key = (entry["type"], entry["original"])
             mapper._value_to_code[key] = entry["code"]
             mapper._code_to_value[entry["code"]] = entry["original"]
         return mapper
+
+    @classmethod
+    def load(cls, path: str) -> "CodeMapper":
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
     def code_to_value_map(self) -> dict:
         return dict(self._code_to_value)
