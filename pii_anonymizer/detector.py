@@ -23,6 +23,31 @@ def strip_quoted_force_encode_keyword(column_name):
     return cleaned if cleaned else text
 
 
+# רמזים לניחוש סוג המידע לפי כותרת העמודה. הסדר קובע - ספציפי לפני כללי
+# (למשל "שם חברה" חייב להיבדק לפני "שם").
+_PII_TYPE_HINTS = [
+    ("COMPANY_ID", ["ח.פ", 'ח"פ', "חפ", "עוסק מורשה", "מספר חברה", "מספר תאגיד"]),
+    ("COMPANY_NAME", ["שם חברה", "שם החברה", "שם עסק", "שם העסק", "שם ספק", "שם הספק"]),
+    ("ID", ["ת.ז", 'ת"ז', "תז", "תעודת זהות", "מספר זהות"]),
+    ("NAME", ["שם"]),
+    ("PHONE", ["טלפון", "נייד", "פלאפון", "סלולרי"]),
+    ("EMAIL", ["מייל", "אימייל", "דואר אלקטרוני", 'דוא"ל', "email", "mail"]),
+    ("ADDRESS", ["כתובת"]),
+]
+
+
+def suggest_pii_type(column_name) -> str:
+    """מנחש את סוג המידע בעמודה לפי מילים בכותרת שלה (למשל "שם" -> NAME,
+    "טלפון" -> PHONE). אם אין רמז מזוהה, מחזיר GENERIC."""
+    if column_name is None:
+        return "GENERIC"
+    text = str(column_name).lower()
+    for pii_type, keywords in _PII_TYPE_HINTS:
+        if any(keyword in text for keyword in keywords):
+            return pii_type
+    return "GENERIC"
+
+
 def _is_black(color) -> bool:
     return color is not None and color.type == "rgb" and isinstance(color.rgb, str) \
         and color.rgb.upper().endswith("000000")

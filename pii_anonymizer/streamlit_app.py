@@ -14,7 +14,22 @@ import streamlit as st
 from openpyxl.utils import get_column_letter
 
 from core import anonymize_workbook, detect_force_encode_columns, restore_workbook
+from detector import suggest_pii_type
 from mapping import CodeMapper
+
+# סוגי מידע לבחירה בממשק: סוג פנימי -> תווית בעברית (הסוג קובע את תחילית הקוד,
+# למשל NAME -> [[NAME_0001]], כך שהקובץ המקודד נשאר קריא)
+PII_TYPE_LABELS = {
+    "NAME": "שם",
+    "ID": "ת.ז",
+    "COMPANY_ID": "ח.פ / עוסק מורשה",
+    "COMPANY_NAME": "שם חברה",
+    "PHONE": "טלפון",
+    "EMAIL": "מייל",
+    "ADDRESS": "כתובת",
+    "GENERIC": "כללי",
+}
+PII_TYPE_ORDER = list(PII_TYPE_LABELS)
 
 st.set_page_config(page_title="המקודד של ליאור", layout="centered")
 st.title("המקודד של ליאור")
@@ -28,7 +43,10 @@ with tab_anon:
     st.caption(
         "העלו קובץ ובחרו מהרשימה אילו עמודות להצפין - אין צורך לערוך את הקובץ מראש. "
         "עמודות שכבר סומנו בקובץ (המילה \"תקודד\" בכותרת, או תא כותרת עם מילוי שחור "
-        "וגופן לבן) יופיעו מסומנות מראש, ואפשר להוסיף או להסיר בחירה חופשי."
+        "וגופן לבן) יופיעו מסומנות מראש, ואפשר להוסיף או להסיר בחירה חופשי. "
+        "לכל עמודה שנבחרה אפשר לקבוע את סוג המידע (שם, ת.ז, טלפון וכו') - הסוג נקבע "
+        "אוטומטית לפי הכותרת וניתן לשינוי, והוא קובע את צורת הקוד בקובץ המקודד "
+        "(למשל [[NAME_0001]] במקום [[VAL_0001]])."
     )
     uploaded = st.file_uploader("העלה קובץ אקסל מקורי", type=["xlsx"], key="anon_upload")
 
@@ -61,7 +79,17 @@ with tab_anon:
                 key=f"anon_cols_{ws.title}",
             )
             if chosen:
-                selected_col_types[ws.title] = {col_idx: "GENERIC" for col_idx in chosen}
+                sheet_col_types = {}
+                for col_idx in chosen:
+                    suggested = suggest_pii_type(headers[col_idx])
+                    sheet_col_types[col_idx] = st.selectbox(
+                        f"סוג המידע בעמודה \"{format_col(col_idx)}\":",
+                        options=PII_TYPE_ORDER,
+                        index=PII_TYPE_ORDER.index(suggested),
+                        format_func=lambda t: PII_TYPE_LABELS[t],
+                        key=f"anon_type_{ws.title}_{col_idx}",
+                    )
+                selected_col_types[ws.title] = sheet_col_types
 
         if st.button("בצע הסתרה", type="primary"):
             if not selected_col_types:
