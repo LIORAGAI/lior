@@ -16,8 +16,9 @@ from openpyxl.utils import get_column_letter
 from core import anonymize_workbook, detect_force_encode_columns, restore_workbook
 from mapping import CodeMapper
 
-st.set_page_config(page_title="הסתרת מידע מזהה באקסל", layout="centered")
-st.title("הסתרה ושחזור של מידע מזהה (PII) בקבצי אקסל")
+st.set_page_config(page_title="המקודד של ליאור", layout="centered")
+st.title("המקודד של ליאור")
+st.subheader("הסתרה ושחזור של מידע מזהה (PII) בקבצי אקסל")
 st.caption("כל העיבוד מתבצע מקומית בדפדפן/בתהליך הזה בלבד. שום קובץ לא נשלח לשום שרת חיצוני.")
 
 tab_anon, tab_restore = st.tabs(["1. הסתרת מידע לפני העלאה", "2. שחזור קובץ שחזר מעובד"])
