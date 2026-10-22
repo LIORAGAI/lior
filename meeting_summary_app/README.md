@@ -33,7 +33,9 @@
 
 ```powershell
 cd meeting_summary_app
-python -m pip install -r requirements.txt pyinstaller
+python -m pip install -r requirements.txt
+$env:PYINSTALLER_COMPILE_BOOTLOADER = "1"
+python -m pip install --no-binary pyinstaller pyinstaller
 cd packaging
 python -m PyInstaller --noconfirm --distpath ..\dist --workpath ..\build MeetingSummary.spec
 iscc installer.iss

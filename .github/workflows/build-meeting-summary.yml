@@ -29,7 +29,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt pyinstaller
+          python -m pip install -r requirements.txt
+          # מנוע הפעלה (bootloader) שנבנה מקוד מקור ולא הגרסה הסטנדרטית - מפחית זיהוי שגוי של אנטי-וירוס
+          $env:PYINSTALLER_COMPILE_BOOTLOADER = "1"
+          python -m pip install --no-binary pyinstaller pyinstaller
+          $boot = python -c "import PyInstaller, pathlib; print(pathlib.Path(PyInstaller.__file__).parent / 'bootloader/Windows-64bit-intel/run.exe')"
+          if (-not (Test-Path $boot)) { throw "bootloader build failed" }
+          Get-FileHash $boot
 
       - name: Build program folder
         working-directory: meeting_summary_app/packaging

@@ -22,7 +22,7 @@ import make_docx
 import transcribe
 
 APP_NAME = "סיכום ישיבה"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 FROZEN = getattr(sys, "frozen", False)
 # קבצים שמגיעים עם התוכנה (בתוכנה מותקנת: תיקיית _internal)
 BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
