@@ -1,4 +1,4 @@
-"""המרת סיכום (Markdown פשוט) למסמך Word בעברית: David 12, ימין לשמאל.
+"""המרת סיכום (Markdown פשוט) למסמך Word בעברית: David 12, שורה וחצי, ימין לשמאל, מיושר לשני הצדדים.
 
 שימוש:  python make_docx.py <summary.md> <output.docx>
 
@@ -8,6 +8,7 @@
 import re
 import sys
 from docx import Document
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -15,12 +16,37 @@ from docx.shared import Pt, RGBColor
 
 FONT = "David"
 
+# סדר הרכיבים שנדרש לפי תקן OOXML (Word עלול לדווח על תוכן לא קריא אם הסדר שגוי)
+ORDER = {
+    "pPr": "pStyle keepNext keepLines pageBreakBefore framePr widowControl numPr suppressLineNumbers pBdr shd tabs "
+           "suppressAutoHyphens kinsoku wordWrap overflowPunct topLinePunct autoSpaceDE autoSpaceDN bidi adjustRightInd "
+           "snapToGrid spacing ind contextualSpacing mirrorIndents suppressOverlap jc textDirection textAlignment "
+           "textboxTightWrap outlineLvl divId cnfStyle rPr sectPr pPrChange",
+    "rPr": "rStyle rFonts b bCs i iCs caps smallCaps strike dstrike outline shadow emboss imprint noProof snapToGrid "
+           "vanish webHidden color spacing w kern position sz szCs highlight u effect bdr shd fitText vertAlign rtl cs "
+           "em lang eastAsianLayout specVanish oMath",
+    "tblPr": "tblStyle tblpPr tblOverlap bidiVisual tblStyleRowBandSize tblStyleColBandSize tblW jc tblCellSpacing "
+             "tblInd tblBorders shd tblLayout tblCellMar tblLook tblCaption tblDescription tblPrChange",
+    "sectPr": "headerReference footerReference footnotePr endnotePr type pgSz pgMar paperSrc pgBorders lnNumType "
+              "pgNumType cols formProt vAlign noEndnote titlePg textDirection bidi rtlGutter docGrid printerSettings "
+              "sectPrChange",
+}
+
+
+def reorder(el):
+    order = {qn("w:" + t): i for i, t in enumerate(ORDER[el.tag.split("}")[1]].split())}
+    for child in sorted(el, key=lambda c: order.get(c.tag, len(order))):
+        el.append(child)  # append מעביר את הרכיב לסוף, כך שהסדר נבנה מחדש
+
 
 def set_rtl_par(p):
-    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    # מיושר לשני הצדדים ושורה וחצי (w:jc="both", w:line="360")
+    p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    p.paragraph_format.line_spacing = 1.5
     pPr = p._p.get_or_add_pPr()
     if pPr.find(qn("w:bidi")) is None:
         pPr.append(OxmlElement("w:bidi"))
+    reorder(pPr)
 
 
 def style_run(run, size=12, bold=False):
@@ -41,6 +67,7 @@ def style_run(run, size=12, bold=False):
     rPr.append(szCs)
     if bold:
         rPr.append(OxmlElement("w:bCs"))
+    reorder(rPr)
 
 
 def add_text(p, text, size=12, bold=False):
@@ -60,21 +87,26 @@ def add_par(doc, text, style=None, size=12, bold=False):
 def add_table(doc, rows):
     table = doc.add_table(rows=len(rows), cols=len(rows[0]))
     table.style = "Table Grid"
+    table.alignment = WD_TABLE_ALIGNMENT.RIGHT
     table._tbl.tblPr.append(OxmlElement("w:bidiVisual"))
+    reorder(table._tbl.tblPr)
     for r, row in enumerate(rows):
         for c, val in enumerate(row):
             p = table.cell(r, c).paragraphs[0]
             set_rtl_par(p)
             add_text(p, val, 12, bold=(r == 0))
-    doc.add_paragraph()
+    set_rtl_par(doc.add_paragraph())
 
 
 def main(src, dst):
     doc = Document()
     doc.sections[0]._sectPr.append(OxmlElement("w:bidi"))
+    reorder(doc.sections[0]._sectPr)
     normal = doc.styles["Normal"]
     normal.font.name = FONT
     normal.font.size = Pt(12)
+    normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    normal.paragraph_format.line_spacing = 1.5
 
     table_rows = []
     lines = open(src, encoding="utf-8-sig").read().splitlines()
