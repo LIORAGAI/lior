@@ -1,0 +1,62 @@
+name: Build Meeting Summary installer
+
+on:
+  push:
+    paths:
+      - "meeting_summary_app/**"
+      - ".github/workflows/build-meeting-summary.yml"
+    tags:
+      - "meeting-summary-v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: meeting_summary_app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Build program folder
+        working-directory: meeting_summary_app/packaging
+        run: python -m PyInstaller --noconfirm --distpath ..\dist --workpath ..\build MeetingSummary.spec
+
+      - name: Self-test packaged program
+        run: |
+          .\dist\MeetingSummary\MeetingSummary.exe --selftest
+          if ($LASTEXITCODE -ne 0) { throw "selftest failed" }
+
+      - name: Build installer
+        run: |
+          $version = (.\dist\MeetingSummary\MeetingSummary.exe --version).Trim()
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
+            choco install innosetup -y --no-progress
+            $env:PATH += ";${env:ProgramFiles(x86)}\Inno Setup 6"
+          }
+          iscc /DMyAppVersion=$version packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "iscc failed" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MeetingSummary-Setup
+          path: meeting_summary_app/dist/MeetingSummary-Setup-*.exe
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: meeting_summary_app/dist/MeetingSummary-Setup-*.exe
