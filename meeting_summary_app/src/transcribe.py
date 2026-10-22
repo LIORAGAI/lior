@@ -27,15 +27,29 @@ def add_cuda_dlls(extra_dirs=CUDA_DIRS):
                     os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]
 
 
+def model_path():
+    # faster-whisper מוריד את המודל בלי להציג התקדמות; מורידים כאן עם פס התקדמות
+    from huggingface_hub import snapshot_download
+    from huggingface_hub.utils import logging
+    logging.set_verbosity_error()  # בלי אזהרות HF_TOKEN / hf_xet באנגלית
+    files = ["config.json", "preprocessor_config.json", "model.bin", "tokenizer.json", "vocabulary.*"]
+    try:
+        return snapshot_download(MODEL, allow_patterns=files, local_files_only=True)
+    except Exception:
+        print("מוריד את מודל התמלול לעברית (כ-1.5GB, פעם אחת בלבד)...", flush=True)
+        return snapshot_download(MODEL, allow_patterns=files)
+
+
 def load_model():
     from faster_whisper import WhisperModel
+    path = model_path()
     if not USE_GPU:
-        return WhisperModel(MODEL, device="cpu", compute_type="int8"), "CPU"
+        return WhisperModel(path, device="cpu", compute_type="int8"), "CPU"
     try:
-        return WhisperModel(MODEL, device="cuda", compute_type="float16"), "GPU"
+        return WhisperModel(path, device="cuda", compute_type="float16"), "GPU"
     except Exception as e:
         print(f"GPU לא זמין ({e}), עובר ל-CPU (איטי יותר)", flush=True)
-        return WhisperModel(MODEL, device="cpu", compute_type="int8"), "CPU"
+        return WhisperModel(path, device="cpu", compute_type="int8"), "CPU"
 
 
 def fmt(t):

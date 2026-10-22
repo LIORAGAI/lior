@@ -2,3 +2,4 @@ faster-whisper
 av<16
 pypdf
 python-docx
+hf_xet

@@ -7,7 +7,7 @@ SRC = os.path.join(SPECPATH, "..", "src")
 
 datas = [(os.path.join(SRC, "summary_prompt.txt"), ".")] + collect_data_files("docx")
 binaries, hiddenimports = [], []
-for pkg in ("faster_whisper", "ctranslate2", "onnxruntime", "tokenizers"):
+for pkg in ("faster_whisper", "ctranslate2", "onnxruntime", "tokenizers", "hf_xet"):
     d, b, h = collect_all(pkg)
     datas += d
     binaries += b
