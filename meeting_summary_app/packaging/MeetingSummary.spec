@@ -8,7 +8,7 @@ from PyInstaller.utils.win32.versioninfo import (FixedFileInfo, StringFileInfo, 
 
 SRC = os.path.join(SPECPATH, "..", "src")
 VERSION = re.search(r'VERSION = "(.+?)"', open(os.path.join(SRC, "app.py"), encoding="utf-8").read()).group(1)
-nums = tuple(int(x) for x in VERSION.split(".")) + (0,)
+nums = (tuple(int(x) for x in VERSION.split(".")) + (0, 0, 0))[:4]
 
 # פרטי גרסה ויצרן בקובץ ה-exe (מפחית זיהוי שגוי של אנטי-וירוס)
 version_info = VSVersionInfo(
@@ -16,7 +16,7 @@ version_info = VSVersionInfo(
     kids=[
         StringFileInfo([StringTable("040904B0", [
             StringStruct("CompanyName", "Lior Agay"),
-            StringStruct("FileDescription", "Meeting Summary - Hebrew meeting transcription and summary"),
+            StringStruct("FileDescription", "Lior Agay Meeting Summarizer"),
             StringStruct("FileVersion", VERSION),
             StringStruct("InternalName", "MeetingSummary"),
             StringStruct("LegalCopyright", "Lior Agay"),

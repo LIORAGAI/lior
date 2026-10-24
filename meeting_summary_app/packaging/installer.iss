@@ -2,7 +2,8 @@
 #ifndef MyAppVersion
   #define MyAppVersion "1.0.0"
 #endif
-#define MyAppName "סיכום ישיבה"
+#define MyAppName "מסכם הישיבות של ליאור אגאי"
+#define ShortcutName "סיכום ישיבה"
 #define MyAppExe "MeetingSummary.exe"
 
 [Setup]
@@ -24,6 +25,7 @@ OutputBaseFilename=MeetingSummary-Setup-{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+InfoBeforeFile=..\מה כלול בגרסה.txt
 UninstallDisplayIcon={app}\{#MyAppExe}
 UninstallDisplayName={#MyAppName}
 
@@ -31,15 +33,17 @@ UninstallDisplayName={#MyAppName}
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Files]
+Source: "..\מה כלול בגרסה.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\MeetingSummary\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"
-Name: "{usersendto}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"
+Name: "{userdesktop}\{#ShortcutName}"; Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"
+Name: "{usersendto}\{#ShortcutName}"; Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"
+Name: "{group}\{#ShortcutName}"; Filename: "{app}\{#MyAppExe}"; WorkingDir: "{app}"
 Name: "{group}\הכנה ראשונית"; Filename: "{app}\{#MyAppExe}"; Parameters: "--setup"; WorkingDir: "{app}"
+Name: "{group}\מה כלול בגרסה"; Filename: "{app}\מה כלול בגרסה.txt"
 Name: "{group}\הנחיות הסיכום (עריכה)"; Filename: "{localappdata}\MeetingSummary\summary_prompt.txt"
 Name: "{group}\הסרת {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]
-Filename: "{app}\{#MyAppExe}"; Parameters: "--setup"; Description: "הכנה ראשונית: התקנת Claude Code, התחברות והורדת מודל התמלול (מומלץ)"; Flags: postinstall
+Filename: "{app}\{#MyAppExe}"; Parameters: "--setup"; Description: "הכנה ראשונית: בדיקה והתקנה של כל מה שחסר - Claude Code, התחברות, מודל התמלול והתראות (מומלץ)"; Flags: postinstall

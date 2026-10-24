@@ -1,4 +1,5 @@
-"""המרת סיכום (Markdown פשוט) למסמך Word בעברית: David 12, שורה וחצי, ימין לשמאל, מיושר לשני הצדדים.
+"""המרת סיכום (Markdown פשוט) למסמך Word בעברית: David 12, ימין לשמאל, יישור לשני הצדדים,
+ריווח שורה וחצי, כותרות גדולות בכחול כהה, טבלאות מימין לשמאל.
 
 שימוש:  python make_docx.py <summary.md> <output.docx>
 
@@ -8,13 +9,16 @@
 import re
 import sys
 from docx import Document
-from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt, RGBColor
 
 FONT = "David"
+FOOTER_TEXT = "מסכם הישיבות של ליאור אגאי"
+BLACK = RGBColor(0, 0, 0)
+DARK_BLUE = RGBColor(0x1F, 0x38, 0x64)
+HEADING_SIZES = {1: 18, 2: 15, 3: 13}  # טקסט רגיל: 12
 
 # סדר הרכיבים שנדרש לפי תקן OOXML (Word עלול לדווח על תוכן לא קריא אם הסדר שגוי)
 ORDER = {
@@ -40,7 +44,7 @@ def reorder(el):
 
 
 def set_rtl_par(p):
-    # מיושר לשני הצדדים ושורה וחצי (w:jc="both", w:line="360")
+    # כל פסקה: ימין לשמאל, מיושרת לשני הצדדים, ריווח שורה וחצי
     p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.line_spacing = 1.5
     pPr = p._p.get_or_add_pPr()
@@ -49,11 +53,11 @@ def set_rtl_par(p):
     reorder(pPr)
 
 
-def style_run(run, size=12, bold=False):
+def style_run(run, size=12, bold=False, color=BLACK):
     run.bold = bold
     run.font.name = FONT
     run.font.size = Pt(size)
-    run.font.color.rgb = RGBColor(0, 0, 0)
+    run.font.color.rgb = color
     rPr = run._r.get_or_add_rPr()
     fonts = rPr.find(qn("w:rFonts"))
     if fonts is None:
@@ -70,43 +74,91 @@ def style_run(run, size=12, bold=False):
     reorder(rPr)
 
 
-def add_text(p, text, size=12, bold=False):
+def add_text(p, text, size=12, bold=False, color=BLACK):
     # **מודגש** בתוך שורה
     for i, part in enumerate(re.split(r"\*\*(.+?)\*\*", text)):
         if part:
-            style_run(p.add_run(part), size, bold or i % 2 == 1)
+            style_run(p.add_run(part), size, bold or i % 2 == 1, color)
 
 
-def add_par(doc, text, style=None, size=12, bold=False):
+def add_par(doc, text, style=None, size=12, bold=False, color=BLACK):
     p = doc.add_paragraph(style=style)
     set_rtl_par(p)
-    add_text(p, text, size, bold)
+    add_text(p, text, size, bold, color)
+    return p
+
+
+def add_heading(doc, text, level):
+    p = add_par(doc, text.replace("**", ""), size=HEADING_SIZES[level], bold=True, color=DARK_BLUE)
+    p.paragraph_format.keep_with_next = True
+    reorder(p._p.get_or_add_pPr())
     return p
 
 
 def add_table(doc, rows):
     table = doc.add_table(rows=len(rows), cols=len(rows[0]))
     table.style = "Table Grid"
-    table.alignment = WD_TABLE_ALIGNMENT.RIGHT
-    table._tbl.tblPr.append(OxmlElement("w:bidiVisual"))
-    reorder(table._tbl.tblPr)
+    # טבלה מימין לשמאל: העמודה הראשונה מימין, והטבלה צמודה לשוליים הימניים
+    tblPr = table._tbl.tblPr
+    tblPr.append(OxmlElement("w:bidiVisual"))
+    jc = OxmlElement("w:jc")
+    jc.set(qn("w:val"), "right")
+    tblPr.append(jc)
+    reorder(tblPr)
     for r, row in enumerate(rows):
         for c, val in enumerate(row):
             p = table.cell(r, c).paragraphs[0]
             set_rtl_par(p)
             add_text(p, val, 12, bold=(r == 0))
-    set_rtl_par(doc.add_paragraph())
+    doc.add_paragraph()
+
+
+def add_field(p, instr, size=10):
+    # שדה Word (PAGE / NUMPAGES) שמתעדכן אוטומטית
+    for kind, text in (("begin", None), (None, instr), ("separate", None), (None, "1"), ("end", None)):
+        run = p.add_run()
+        style_run(run, size)
+        if kind:
+            fld = OxmlElement("w:fldChar")
+            fld.set(qn("w:fldCharType"), kind)
+            run._r.append(fld)
+        elif text == instr:
+            it = OxmlElement("w:instrText")
+            it.set(qn("xml:space"), "preserve")
+            it.text = f" {instr} "
+            run._r.append(it)
+        else:
+            run.text = text
+
+
+def set_alignment(p, align):
+    # שינוי יישור אחרי set_rtl_par - שומרים על סדר הרכיבים
+    p.alignment = align
+    reorder(p._p.get_or_add_pPr())
+
+
+def add_footer(section):
+    p = section.footer.paragraphs[0]
+    set_rtl_par(p)
+    set_alignment(p, WD_ALIGN_PARAGRAPH.CENTER)
+    add_text(p, f"{FOOTER_TEXT}   |   עמוד ", 10)
+    add_field(p, "PAGE")
+    add_text(p, " מתוך ", 10)
+    add_field(p, "NUMPAGES")
 
 
 def main(src, dst):
     doc = Document()
     doc.sections[0]._sectPr.append(OxmlElement("w:bidi"))
     reorder(doc.sections[0]._sectPr)
+    add_footer(doc.sections[0])
     normal = doc.styles["Normal"]
     normal.font.name = FONT
     normal.font.size = Pt(12)
     normal.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     normal.paragraph_format.line_spacing = 1.5
+    normal._element.get_or_add_pPr().append(OxmlElement("w:bidi"))
+    reorder(normal._element.get_or_add_pPr())
 
     table_rows = []
     lines = open(src, encoding="utf-8-sig").read().splitlines()
@@ -123,12 +175,14 @@ def main(src, dst):
         if not s:
             continue
         if s.startswith("# "):
-            p = add_par(doc, s[2:], size=16, bold=True)
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            add_heading(doc, s[2:], 1)
         elif s.startswith("## "):
-            add_par(doc, s[3:], size=14, bold=True)
+            add_heading(doc, s[3:], 2)
         elif s.startswith("### "):
-            add_par(doc, s[4:], size=12, bold=True)
+            add_heading(doc, s[4:], 3)
+        elif re.fullmatch(r"\*\*[^*]+\*\*:?", s):
+            # שורה שכולה מודגשת = כותרת
+            add_heading(doc, s.rstrip(":").strip("*").strip() + (":" if s.endswith(":") else ""), 3)
         elif s.startswith("- "):
             add_par(doc, s[2:], style="List Bullet")
         elif re.match(r"\d+\.\s", s):

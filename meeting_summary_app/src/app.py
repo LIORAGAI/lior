@@ -1,4 +1,5 @@
-"""סיכום ישיבה: קובץ שמע (ואופציונלית מסמכי רקע: txt / docx / pdf) -> תמלול -> סיכום של Claude -> Word על שולחן העבודה.
+"""מסכם הישיבות של ליאור אגאי: קובץ שמע (ואופציונלית מסמכי רקע: txt / docx / pdf) -> תמלול -> סיכום של Claude
+-> Word על שולחן העבודה + עותק ב-OneDrive + התראה לאייפון.
 
 שימוש:
     MeetingSummary.exe <קובץ שמע> [קבצי רקע...]   עיבוד קבצים (גם בגרירה לאייקון או "שלח אל")
@@ -11,6 +12,7 @@ import ctypes
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,8 +23,8 @@ from pathlib import Path
 import make_docx
 import transcribe
 
-APP_NAME = "סיכום ישיבה"
-VERSION = "1.0.3"
+APP_NAME = "מסכם הישיבות של ליאור אגאי"
+VERSION = "2.5"
 FROZEN = getattr(sys, "frozen", False)
 # קבצים שמגיעים עם התוכנה (בתוכנה מותקנת: תיקיית _internal)
 BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
@@ -32,6 +34,9 @@ WORK = DATA / "transcripts"  # תמלולים וטיוטות (לא על שולח
 TOKEN_LOG = DATA / "token_log.csv"
 PROMPT = DATA / "summary_prompt.txt"  # עותק שניתן לעריכה של הנחיות הסיכום
 CUDA_DIR = DATA / "cuda"
+NTFY_TOPIC = DATA / "ntfy_topic.txt"  # ערוץ ההתראות לאייפון (ntfy)
+OLD_INSTALL = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "LIOR MEETINGS"  # גרסאות 2.x בסקריפטים
+ONEDRIVE_DIR = Path(os.environ.get("OneDrive") or Path.home() / "OneDrive") / "סיכומי ישיבות"
 AUDIO_EXT = {".m4a", ".mp3", ".wav", ".ogg", ".opus", ".aac", ".flac", ".wma", ".mp4", ".webm", ".amr", ".3gp"}
 CUDA_PACKAGES = [("nvidia-cublas-cu12", ""), ("nvidia-cudnn-cu12", "9.")]  # (חבילה, קידומת גרסה)
 
@@ -42,7 +47,15 @@ FORMAT_RULES = """
 - טבלאות בפורמט | עמודה | עמודה |, כשהעמודה הראשונה היא הימנית (שאלה | הקשר | אחראי).
 - **טקסט** להדגשה. ללא תבליטים מקוננים, ללא קוד, ללא הקדמה או הערות לפני הסיכום או אחריו.
 - התמלול נוצר אוטומטית ועלול לשבש שמות ומונחים; סמן פרטים מפוקפקים כ"נדרש אימות".
+
+בנוסף, השורה הראשונה של הפלט (לפני הסיכום) תהיה שם לקובץ, בדיוק במבנה הזה:
+שם-קובץ: <נושא הישיבה בכמה מילים> - <שמות פרטיים של המשתתפים, מופרדים בפסיק> - <תאריך DD.MM.YYYY>
+- נושא: קצר וברור (עד 6 מילים).
+- משתתפים: רק שמות פרטיים שזוהו בוודאות סבירה; אם לא זוהו שמות - השמט את החלק הזה.
+- תאריך: תאריך הישיבה אם נאמר או ניתן להסיק משם הקובץ או מהרקע; אחרת - תאריך יצירת קובץ ההקלטה שמסרתי.
+- בלי התווים / \\ : * ? " < > |
 """
+FILENAME_PREFIX = "שם-קובץ:"
 
 
 def init():
@@ -57,12 +70,20 @@ def init():
     WORK.mkdir(parents=True, exist_ok=True)
     if not PROMPT.exists():
         shutil.copy(BUNDLE / "summary_prompt.txt", PROMPT)
+    # מעבר מגרסת הסקריפטים (2.x): ערוץ ההתראות והיסטוריית הטוקנים
+    for name in ("ntfy_topic.txt", "token_log.csv"):
+        old = OLD_INSTALL / name
+        if old.exists() and not (DATA / name).exists():
+            shutil.copy2(old, DATA / name)
     transcribe.CUDA_DIRS.append(CUDA_DIR)
     transcribe.USE_GPU = not FROZEN or any(CUDA_DIR.glob("cudnn*.dll"))
 
 
 def find_claude():
-    for c in (Path.home() / ".local" / "bin" / "claude.exe", shutil.which("claude")):
+    # מחפשים בכל המקומות שבהם Claude Code עשוי להיות מותקן (מתקין רשמי, npm, PATH)
+    appdata = Path(os.environ.get("APPDATA", Path.home()))
+    for c in (Path.home() / ".local" / "bin" / "claude.exe", shutil.which("claude.exe"), shutil.which("claude"),
+              appdata / "npm" / "claude.cmd"):
         if c and Path(c).exists():
             return Path(c)
     return None
@@ -145,11 +166,14 @@ def install_cuda():
 
 
 def setup():
-    print(f"=== {APP_NAME} - הכנה ראשונית ===", flush=True)
-    print("\n1/3 Claude Code", flush=True)
+    print(f"=== {APP_NAME} - גרסה {VERSION} - הכנה ראשונית ===", flush=True)
+    print("כל רכיב שלא נמצא במחשב (בכל מיקום) מותקן מחדש.", flush=True)
+    print("\n1/4 Claude Code", flush=True)
+    if find_claude():
+        print(f"Claude Code נמצא: {find_claude()}", flush=True)
     ensure_login()
 
-    print("\n2/3 האצת GPU", flush=True)
+    print("\n2/4 האצת GPU", flush=True)
     if not has_nvidia():
         print("לא נמצא כרטיס NVIDIA - התמלול ירוץ על המעבד (איטי יותר)", flush=True)
     elif any(CUDA_DIR.glob("cudnn*.dll")):
@@ -162,10 +186,21 @@ def setup():
         except Exception as e:
             print(f"התקנת האצת GPU נכשלה ({e}) - התמלול ירוץ על המעבד", flush=True)
 
-    print("\n3/3 הורדת מודל התמלול לעברית (כ-1.5GB, פעם אחת)", flush=True)
+    print("\n3/4 מודל התמלול לעברית", flush=True)
     transcribe.add_cuda_dlls()
     _, device = transcribe.load_model()
     print(f"המודל מוכן, ירוץ על {device}", flush=True)
+
+    print("\n4/4 התראות לאייפון (ntfy)", flush=True)
+    if NTFY_TOPIC.exists():
+        print(f"ערוץ ההתראות: {NTFY_TOPIC.read_text(encoding='utf-8').strip()}", flush=True)
+    else:
+        topic = input("הקלד את שם ערוץ ה-ntfy (מהקובץ ntfy_topic.txt), או Enter לדילוג: ").strip()
+        if topic:
+            NTFY_TOPIC.write_text(topic, encoding="utf-8")
+            print("נשמר. באייפון: אפליקציית ntfy > + > שם הערוץ.", flush=True)
+        else:
+            print("ללא התראות לאייפון (אפשר להוסיף בהפעלה חוזרת של 'הכנה ראשונית').", flush=True)
     print("\nההכנה הסתיימה. אפשר לגרור קבצי שמע לאייקון 'סיכום ישיבה' שעל שולחן העבודה.", flush=True)
 
 
@@ -207,10 +242,51 @@ def read_background(path):
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
+def notify_phone(doc_name):
+    # התראה לאייפון דרך ntfy, עם שם קובץ הסיכום (בלי תוכן הסיכום)
+    if not NTFY_TOPIC.exists():
+        return
+    body = json.dumps({
+        "topic": NTFY_TOPIC.read_text(encoding="utf-8").strip(),
+        "title": "מסכם הישיבות",
+        "message": f"סיכום ישיבה חדש מוכן ב-OneDrive:\n{doc_name}",
+    }).encode("utf-8")
+    try:
+        req = urllib.request.Request("https://ntfy.sh/", data=body, method="POST",
+                                     headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10).close()
+        print("נשלחה התראה לאייפון", flush=True)
+    except Exception as e:
+        print(f"שליחת ההתראה לאייפון נכשלה: {e}", flush=True)
+
+
+def recording_date(audio):
+    # הוותיק מבין תאריך היצירה והשינוי (בהעתקה, תאריך היצירה הוא מועד ההעתקה)
+    st = audio.stat()
+    return datetime.datetime.fromtimestamp(min(st.st_ctime, st.st_mtime)).strftime("%d.%m.%Y")
+
+
+def split_filename(summary, audio):
+    """מפריד את שורת שם-הקובץ מהסיכום. מחזיר (שם קובץ נקי, סיכום)."""
+    lines = summary.splitlines()
+    for i, line in enumerate(lines[:3]):
+        clean = line.strip().strip("*").strip()
+        if clean.startswith(FILENAME_PREFIX):
+            break
+    else:
+        return f"{audio.stem} - {recording_date(audio)}", summary
+    rest = "\n".join(lines[:i] + lines[i + 1:])
+    name = clean[len(FILENAME_PREFIX):]
+    name = re.sub(r'[\\/:*?"<>|\r\n\t]', " ", name)
+    name = re.sub(r"\s+", " ", name).strip(" .-")[:120].strip(" .-")
+    return (name or f"{audio.stem} - {recording_date(audio)}"), rest.lstrip("\n")
+
+
 def summarize(claude, audio, transcript, background):
     """מחזיר (טקסט הסיכום, מילון שימוש בטוקנים)."""
     rules = PROMPT.read_text(encoding="utf-8")
-    prompt = f"{rules}\n{FORMAT_RULES}\nשם קובץ ההקלטה: {audio.name}\n"
+    prompt = (f"{rules}\n{FORMAT_RULES}\nשם קובץ ההקלטה: {audio.name}\n"
+              f"תאריך יצירת קובץ ההקלטה: {recording_date(audio)}\n")
     for name, text in background:
         prompt += f"\n<רקע קובץ='{name}'>\n{text}\n</רקע>\n"
     prompt += f"\n<תמלול>\n{transcript.read_text(encoding='utf-8')}\n</תמלול>\n"
@@ -251,12 +327,20 @@ def process(claude, audio, background):
     print(f"\n=== {audio.name} ===", flush=True)
     transcript = transcribe.transcribe(audio, WORK)
     summary, usage = summarize(claude, audio, transcript, background)
+    doc_name, summary = split_filename(summary, audio)
     md = WORK / (audio.stem + ".summary.md")
     md.write_text(summary, encoding="utf-8")
-    out = free_path(desktop_dir() / (audio.stem + ".docx"))
+    out = free_path(desktop_dir() / (doc_name + ".docx"))
     make_docx.main(md, out)
     log_tokens(audio.name, usage)
     print(f"הסיכום נשמר בשולחן העבודה: {out.name}", flush=True)
+    try:
+        ONEDRIVE_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(out, free_path(ONEDRIVE_DIR / out.name))
+        print(f"עותק נשמר ב-OneDrive: {ONEDRIVE_DIR}", flush=True)
+        notify_phone(out.name)
+    except Exception as e:
+        print(f"שמירת העותק ב-OneDrive נכשלה: {e}", flush=True)
     os.startfile(out)
     return usage
 
