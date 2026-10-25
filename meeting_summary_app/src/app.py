@@ -11,6 +11,8 @@ import csv
 import ctypes
 import datetime
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 import os
 import re
 import shutil
@@ -24,7 +26,7 @@ import make_docx
 import transcribe
 
 APP_NAME = "מסכם הישיבות של ליאור אגאי"
-VERSION = "2.5"
+VERSION = "2.6"
 FROZEN = getattr(sys, "frozen", False)
 # קבצים שמגיעים עם התוכנה (בתוכנה מותקנת: תיקיית _internal)
 BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
@@ -291,7 +293,6 @@ def summarize(claude, audio, transcript, background):
         prompt += f"\n<רקע קובץ='{name}'>\n{text}\n</רקע>\n"
     prompt += f"\n<תמלול>\n{transcript.read_text(encoding='utf-8')}\n</תמלול>\n"
 
-    print("Claude כותב את הסיכום...", flush=True)
     res = subprocess.run(
         [str(claude), "-p", "--output-format", "json"],
         input=prompt, capture_output=True, encoding="utf-8", cwd=DATA,
@@ -323,17 +324,18 @@ def log_tokens(name, usage):
                     usage["input"], usage["output"], usage["total"], f"{usage['cost_usd']:.4f}"])
 
 
-def process(claude, audio, background):
-    print(f"\n=== {audio.name} ===", flush=True)
-    transcript = transcribe.transcribe(audio, WORK)
+def finish(claude, audio, transcript, background):
+    # סיכום ב-Claude ושמירה. רץ ברקע, כך שהתמלול של הקובץ הבא מתחיל בינתיים
+    start = time.time()
     summary, usage = summarize(claude, audio, transcript, background)
+    usage["claude_sec"] = time.time() - start
     doc_name, summary = split_filename(summary, audio)
     md = WORK / (audio.stem + ".summary.md")
     md.write_text(summary, encoding="utf-8")
     out = free_path(desktop_dir() / (doc_name + ".docx"))
     make_docx.main(md, out)
     log_tokens(audio.name, usage)
-    print(f"הסיכום נשמר בשולחן העבודה: {out.name}", flush=True)
+    print(f"\n[{audio.name}] הסיכום נשמר בשולחן העבודה: {out.name}", flush=True)
     try:
         ONEDRIVE_DIR.mkdir(parents=True, exist_ok=True)
         shutil.copy2(out, free_path(ONEDRIVE_DIR / out.name))
@@ -365,19 +367,37 @@ def run(files):
         sys.exit("לא נמצא קובץ שמע. גרור קובץ שמע (m4a, mp3, wav...) אל האייקון.")
 
     claude = ensure_login()
+    jobs = []
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        for audio in audios:
+            print(f"\n=== {audio.name} ===", flush=True)
+            try:
+                start = time.time()
+                transcript = transcribe.transcribe(audio, WORK)
+                job = pool.submit(finish, claude, audio, transcript, background)
+                jobs.append((audio.name, time.time() - start, job))
+                print("Claude כותב את הסיכום ברקע...", flush=True)
+            except Exception as e:
+                print(f"\nשגיאה בתמלול {audio.name}: {e}", flush=True)
+                jobs.append((audio.name, 0, None))
     results = []
-    for audio in audios:
+    for name, transcribe_sec, job in jobs:
         try:
-            results.append((audio.name, process(claude, audio, background)))
+            usage = job.result() if job else None
+            if usage:
+                usage["transcribe_sec"] = transcribe_sec
+            results.append((name, usage))
         except Exception as e:
-            print(f"\nשגיאה בעיבוד {audio.name}: {e}", flush=True)
-            results.append((audio.name, None))
+            print(f"\nשגיאה בעיבוד {name}: {e}", flush=True)
+            results.append((name, None))
 
     print("\n================ סיכום הרצה ================", flush=True)
     for name, usage in results:
         if usage:
             print(f"{name}: {usage['total']:,} טוקנים (קלט {usage['input']:,}, פלט {usage['output']:,})"
                   f", עלות משוערת ${usage['cost_usd']:.4f}", flush=True)
+            print(f"   זמן: תמלול {transcribe.fmt(usage['transcribe_sec'])}, Claude {transcribe.fmt(usage['claude_sec'])}",
+                  flush=True)
         else:
             print(f"{name}: נכשל", flush=True)
     print(f"היסטוריית טוקנים: {TOKEN_LOG}", flush=True)

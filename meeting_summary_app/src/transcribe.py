@@ -40,16 +40,25 @@ def model_path():
         return snapshot_download(MODEL, allow_patterns=files)
 
 
+_loaded = None  # המודל נטען פעם אחת לכל הרצה, גם כשמתמללים כמה קבצים
+
+
 def load_model():
+    global _loaded
+    if _loaded:
+        return _loaded
     from faster_whisper import WhisperModel
     path = model_path()
-    if not USE_GPU:
-        return WhisperModel(path, device="cpu", compute_type="int8"), "CPU"
-    try:
-        return WhisperModel(path, device="cuda", compute_type="float16"), "GPU"
-    except Exception as e:
-        print(f"GPU לא זמין ({e}), עובר ל-CPU (איטי יותר)", flush=True)
-        return WhisperModel(path, device="cpu", compute_type="int8"), "CPU"
+    # ברירת המחדל במעבד היא 4 ליבות בלבד; משתמשים בכל הליבות הפיזיות (בלי שינוי בתוצאה)
+    threads = max(4, (os.cpu_count() or 8) // 2)
+    if USE_GPU:
+        try:
+            _loaded = WhisperModel(path, device="cuda", compute_type="float16"), "GPU"
+            return _loaded
+        except Exception as e:
+            print(f"GPU לא זמין ({e}), עובר ל-CPU (איטי יותר)", flush=True)
+    _loaded = WhisperModel(path, device="cpu", compute_type="int8", cpu_threads=threads), f"CPU, {threads} ליבות"
+    return _loaded
 
 
 def fmt(t):
