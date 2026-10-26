@@ -32,6 +32,9 @@ UninstallDisplayName={#MyAppName}
 [Languages]
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
+[Tasks]
+Name: "watch"; Description: "סיכום אוטומטי של הקלטות שמועלות לתיקייה ב-OneDrive (סיכומי ישיבות\הקלטות לסיכום), בדיקה כל 5 דקות"
+
 [Files]
 Source: "..\מה כלול בגרסה.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\MeetingSummary\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -43,7 +46,14 @@ Name: "{group}\{#ShortcutName}"; Filename: "{app}\{#MyAppExe}"; WorkingDir: "{ap
 Name: "{group}\הכנה ראשונית"; Filename: "{app}\{#MyAppExe}"; Parameters: "--setup"; WorkingDir: "{app}"
 Name: "{group}\מה כלול בגרסה"; Filename: "{app}\מה כלול בגרסה.txt"
 Name: "{group}\הנחיות הסיכום (עריכה)"; Filename: "{localappdata}\MeetingSummary\summary_prompt.txt"
+Name: "{group}\תיקיית הקלטות לסיכום (OneDrive)"; Filename: "{app}\MeetingSummaryWatch.exe"; Parameters: "--open-watch"; WorkingDir: "{app}"
+Name: "{group}\יומן הסיכום האוטומטי"; Filename: "{localappdata}\MeetingSummary\watch.log"
 Name: "{group}\הסרת {#MyAppName}"; Filename: "{uninstallexe}"
 
 [Run]
+Filename: "{app}\{#MyAppExe}"; Parameters: "--install-watch"; Flags: runhidden; Tasks: watch; StatusMsg: "יוצר משימה מתוזמנת..."
+Filename: "{app}\{#MyAppExe}"; Parameters: "--remove-watch"; Flags: runhidden; Tasks: not watch
 Filename: "{app}\{#MyAppExe}"; Parameters: "--setup"; Description: "הכנה ראשונית: בדיקה והתקנה של כל מה שחסר - Claude Code, התחברות, מודל התמלול והתראות (מומלץ)"; Flags: postinstall
+
+[UninstallRun]
+Filename: "{app}\{#MyAppExe}"; Parameters: "--remove-watch"; Flags: runhidden; RunOnceId: "RemoveWatch"

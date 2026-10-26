@@ -47,4 +47,7 @@ a = Analysis(
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="MeetingSummary", console=True,
           upx=False, version=version_info)
-coll = COLLECT(exe, a.binaries, a.datas, upx=False, name="MeetingSummary")
+# אותה תוכנה בלי חלון - למשימה המתוזמנת שבודקת את תיקיית ההקלטות ב-OneDrive
+exe_watch = EXE(pyz, a.scripts, [], exclude_binaries=True, name="MeetingSummaryWatch", console=False,
+                upx=False, version=version_info)
+coll = COLLECT(exe, exe_watch, a.binaries, a.datas, upx=False, name="MeetingSummary")

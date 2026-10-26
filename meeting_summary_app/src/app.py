@@ -6,6 +6,8 @@
     MeetingSummary.exe                            פתיחת חלון לבחירת קבצים
     MeetingSummary.exe --setup                    הכנה ראשונית: Claude Code, התחברות, מודל תמלול, האצת GPU
     MeetingSummary.exe --selftest                 בדיקה עצמית של רכיבי התוכנה (ללא Claude)
+    MeetingSummaryWatch.exe --watch               בדיקה אחת של תיקיית ההקלטות ב-OneDrive (מופעל ע"י משימה מתוזמנת)
+    MeetingSummary.exe --install-watch / --remove-watch   הפעלה / ביטול של המשימה המתוזמנת
 """
 import csv
 import ctypes
@@ -24,7 +26,7 @@ import make_docx
 import transcribe
 
 APP_NAME = "מסכם הישיבות של ליאור אגאי"
-VERSION = "2.5"
+VERSION = "2.7"
 FROZEN = getattr(sys, "frozen", False)
 # קבצים שמגיעים עם התוכנה (בתוכנה מותקנת: תיקיית _internal)
 BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
@@ -37,6 +39,8 @@ CUDA_DIR = DATA / "cuda"
 NTFY_TOPIC = DATA / "ntfy_topic.txt"  # ערוץ ההתראות לאייפון (ntfy)
 OLD_INSTALL = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "LIOR MEETINGS"  # גרסאות 2.x בסקריפטים
 ONEDRIVE_DIR = Path(os.environ.get("OneDrive") or Path.home() / "OneDrive") / "סיכומי ישיבות"
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)  # תהליכי רקע בלי חלון שחור
+QUIET = False  # מצב מעקב: בלי חלון, בלי שאלות ובלי פתיחת Word
 AUDIO_EXT = {".m4a", ".mp3", ".wav", ".ogg", ".opus", ".aac", ".flac", ".wma", ".mp4", ".webm", ".amr", ".3gp"}
 CUDA_PACKAGES = [("nvidia-cublas-cu12", ""), ("nvidia-cudnn-cu12", "9.")]  # (חבילה, קידומת גרסה)
 
@@ -92,7 +96,7 @@ def find_claude():
 def install_claude():
     print("מתקין את Claude Code...", flush=True)
     subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-                    "irm https://claude.ai/install.ps1 | iex"])
+                    "irm https://claude.ai/install.ps1 | iex"], creationflags=NO_WINDOW if QUIET else 0)
     claude = find_claude()
     if not claude:
         sys.exit("התקנת Claude Code נכשלה. בדוק את החיבור לאינטרנט והפעל שוב את 'הכנה ראשונית'.")
@@ -100,7 +104,7 @@ def install_claude():
 
 
 def claude_logged_in(claude):
-    r = subprocess.run([str(claude), "auth", "status"], capture_output=True, encoding="utf-8")
+    r = subprocess.run([str(claude), "auth", "status"], capture_output=True, encoding="utf-8", creationflags=NO_WINDOW)
     return r.returncode == 0
 
 
@@ -244,12 +248,16 @@ def read_background(path):
 
 def notify_phone(doc_name):
     # התראה לאייפון דרך ntfy, עם שם קובץ הסיכום (בלי תוכן הסיכום)
+    notify(f"סיכום ישיבה חדש מוכן ב-OneDrive:\n{doc_name}")
+
+
+def notify(message):
     if not NTFY_TOPIC.exists():
         return
     body = json.dumps({
         "topic": NTFY_TOPIC.read_text(encoding="utf-8").strip(),
         "title": "מסכם הישיבות",
-        "message": f"סיכום ישיבה חדש מוכן ב-OneDrive:\n{doc_name}",
+        "message": message,
     }).encode("utf-8")
     try:
         req = urllib.request.Request("https://ntfy.sh/", data=body, method="POST",
@@ -294,7 +302,7 @@ def summarize(claude, audio, transcript, background):
     print("Claude כותב את הסיכום...", flush=True)
     res = subprocess.run(
         [str(claude), "-p", "--output-format", "json"],
-        input=prompt, capture_output=True, encoding="utf-8", cwd=DATA,
+        input=prompt, capture_output=True, encoding="utf-8", cwd=DATA, creationflags=NO_WINDOW,
     )
     try:
         data = json.loads(res.stdout)
@@ -341,7 +349,8 @@ def process(claude, audio, background):
         notify_phone(out.name)
     except Exception as e:
         print(f"שמירת העותק ב-OneDrive נכשלה: {e}", flush=True)
-    os.startfile(out)
+    if not QUIET:
+        os.startfile(out)
     return usage
 
 
@@ -390,6 +399,9 @@ def main():
         return selftest()
     if args == ["--version"]:
         return print(VERSION)
+    if args and args[0] in ("--watch", "--install-watch", "--remove-watch", "--open-watch"):
+        import watch
+        return watch.main(args[0])
     try:
         if args == ["--setup"]:
             setup()

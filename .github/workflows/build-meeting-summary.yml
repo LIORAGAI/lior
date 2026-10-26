@@ -46,6 +46,21 @@ jobs:
           .\dist\MeetingSummary\MeetingSummary.exe --selftest
           if ($LASTEXITCODE -ne 0) { throw "selftest failed" }
 
+      - name: Test watch mode and scheduled task
+        run: |
+          $env:OneDrive = "$env:RUNNER_TEMP\od"
+          .\dist\MeetingSummary\MeetingSummary.exe --install-watch
+          if ($LASTEXITCODE -ne 0) { throw "install-watch failed" }
+          schtasks /Query /TN "MeetingSummary OneDrive Watch" /V /FO LIST
+          if ($LASTEXITCODE -ne 0) { throw "scheduled task not found" }
+          Start-Process -Wait .\dist\MeetingSummary\MeetingSummaryWatch.exe -ArgumentList "--watch"
+          if (-not (Test-Path "$env:LOCALAPPDATA\MeetingSummary\watch.log")) { throw "watch log missing" }
+          if (-not (Get-ChildItem "$env:OneDrive" -Recurse -Directory | Where-Object Name -eq "הקלטות לסיכום")) { throw "watch folder missing" }
+          .\dist\MeetingSummary\MeetingSummary.exe --remove-watch
+          schtasks /Query /TN "MeetingSummary OneDrive Watch" 2>$null
+          if ($LASTEXITCODE -eq 0) { throw "scheduled task not removed" }
+          $global:LASTEXITCODE = 0
+
       - name: Build installer
         run: |
           $version = (.\dist\MeetingSummary\MeetingSummary.exe --version).Trim()

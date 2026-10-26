@@ -12,6 +12,7 @@ from pathlib import Path
 MODEL = "ivrit-ai/whisper-large-v3-turbo-ct2"
 CUDA_DIRS = []  # תיקיות נוספות עם DLL של CUDA (נקבע ע"י app.py)
 USE_GPU = True  # app.py מכבה כשספריות CUDA לא הותקנו, כדי לא לקרוס באמצע תמלול
+SHOW_PROGRESS = True  # במצב מעקב (יומן) לא מציגים אחוזים
 
 
 def add_cuda_dlls(extra_dirs=CUDA_DIRS):
@@ -76,7 +77,8 @@ def transcribe(audio, out_dir):
             f.write(f"[{fmt(seg.start)}] {seg.text.strip()}\n")
             f.flush()
             pct = 100 * seg.end / info.duration if info.duration else 0
-            print(f"\r{pct:5.1f}%", end="", flush=True)
+            if SHOW_PROGRESS:
+                print(f"\r{pct:5.1f}%", end="", flush=True)
 
     print(f"\nהסתיים תוך {fmt(time.time() - start)} -> {out}", flush=True)
     return out
