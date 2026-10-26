@@ -12,6 +12,7 @@
 import csv
 import ctypes
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -26,7 +27,7 @@ import make_docx
 import transcribe
 
 APP_NAME = "מסכם הישיבות של ליאור אגאי"
-VERSION = "2.7"
+VERSION = "2.8"
 FROZEN = getattr(sys, "frozen", False)
 # קבצים שמגיעים עם התוכנה (בתוכנה מותקנת: תיקיית _internal)
 BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
@@ -36,6 +37,7 @@ WORK = DATA / "transcripts"  # תמלולים וטיוטות (לא על שולח
 TOKEN_LOG = DATA / "token_log.csv"
 PROMPT = DATA / "summary_prompt.txt"  # עותק שניתן לעריכה של הנחיות הסיכום
 CUDA_DIR = DATA / "cuda"
+PROCESSED = DATA / "processed.json"  # טביעות אצבע של הקלטות שכבר סוכמו
 NTFY_TOPIC = DATA / "ntfy_topic.txt"  # ערוץ ההתראות לאייפון (ntfy)
 OLD_INSTALL = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Programs" / "LIOR MEETINGS"  # גרסאות 2.x בסקריפטים
 ONEDRIVE_DIR = Path(os.environ.get("OneDrive") or Path.home() / "OneDrive") / "סיכומי ישיבות"
@@ -120,6 +122,30 @@ def ensure_login():
     return claude
 
 
+def file_hash(path):
+    # טביעת אצבע של תוכן הקובץ - מזהה הקלטה שכבר סוכמה גם אם הועלתה שוב בשם אחר
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def processed():
+    return json.loads(PROCESSED.read_text(encoding="utf-8")) if PROCESSED.exists() else {}
+
+
+def already_done(audio):
+    return file_hash(audio) in processed()
+
+
+def remember(audio, doc_name):
+    done = processed()
+    done[file_hash(audio)] = {"file": audio.name, "summary": doc_name,
+                              "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
+    PROCESSED.write_text(json.dumps(done, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def desktop_dir():
     # הנתיב האמיתי של שולחן העבודה (גם כש-OneDrive מעביר אותו למקום אחר)
     buf = ctypes.create_unicode_buffer(260)
@@ -172,12 +198,12 @@ def install_cuda():
 def setup():
     print(f"=== {APP_NAME} - גרסה {VERSION} - הכנה ראשונית ===", flush=True)
     print("כל רכיב שלא נמצא במחשב (בכל מיקום) מותקן מחדש.", flush=True)
-    print("\n1/4 Claude Code", flush=True)
+    print("\n1/5 Claude Code", flush=True)
     if find_claude():
         print(f"Claude Code נמצא: {find_claude()}", flush=True)
     ensure_login()
 
-    print("\n2/4 האצת GPU", flush=True)
+    print("\n2/5 האצת GPU", flush=True)
     if not has_nvidia():
         print("לא נמצא כרטיס NVIDIA - התמלול ירוץ על המעבד (איטי יותר)", flush=True)
     elif any(CUDA_DIR.glob("cudnn*.dll")):
@@ -190,12 +216,12 @@ def setup():
         except Exception as e:
             print(f"התקנת האצת GPU נכשלה ({e}) - התמלול ירוץ על המעבד", flush=True)
 
-    print("\n3/4 מודל התמלול לעברית", flush=True)
+    print("\n3/5 מודל התמלול לעברית", flush=True)
     transcribe.add_cuda_dlls()
     _, device = transcribe.load_model()
     print(f"המודל מוכן, ירוץ על {device}", flush=True)
 
-    print("\n4/4 התראות לאייפון (ntfy)", flush=True)
+    print("\n4/5 התראות לאייפון (ntfy)", flush=True)
     if NTFY_TOPIC.exists():
         print(f"ערוץ ההתראות: {NTFY_TOPIC.read_text(encoding='utf-8').strip()}", flush=True)
     else:
@@ -205,6 +231,9 @@ def setup():
             print("נשמר. באייפון: אפליקציית ntfy > + > שם הערוץ.", flush=True)
         else:
             print("ללא התראות לאייפון (אפשר להוסיף בהפעלה חוזרת של 'הכנה ראשונית').", flush=True)
+    print("\n5/5 מייל עם שם כל סיכום חדש (בסיכום האוטומטי מ-OneDrive)", flush=True)
+    import mailer
+    mailer.configure()
     print("\nההכנה הסתיימה. אפשר לגרור קבצי שמע לאייקון 'סיכום ישיבה' שעל שולחן העבודה.", flush=True)
 
 
@@ -215,6 +244,9 @@ def selftest():
     import wave
 
     import pypdf  # noqa: F401
+    if os.name == "nt":
+        import mailer
+        assert mailer.unprotect(mailer.protect("בדיקה".encode())) == "בדיקה".encode()
     from faster_whisper import WhisperModel
 
     md = WORK / "selftest.md"
@@ -341,6 +373,8 @@ def process(claude, audio, background):
     out = free_path(desktop_dir() / (doc_name + ".docx"))
     make_docx.main(md, out)
     log_tokens(audio.name, usage)
+    remember(audio, out.name)
+    usage["doc"] = out.name
     print(f"הסיכום נשמר בשולחן העבודה: {out.name}", flush=True)
     try:
         ONEDRIVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -393,6 +427,7 @@ def run(files):
 
 
 def main():
+    sys.modules.setdefault("app", sys.modules[__name__])  # watch / mailer משתמשים באותו מופע של app
     init()
     args = sys.argv[1:]
     if args == ["--selftest"]:

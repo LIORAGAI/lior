@@ -1,8 +1,9 @@
 """מצב מעקב: קבצי שמע שמועלים לתיקייה ב-OneDrive מסוכמים אוטומטית, לפי אותם כללים כמו בגרירה לאייקון.
 
-משימה מתוזמנת של Windows מפעילה כל כמה דקות את MeetingSummaryWatch.exe --watch (בלי חלון).
-כל הרצה בודקת את התיקייה פעם אחת ומסתיימת. קובץ שעובד עובר לתת-תיקייה "עובדו", וקובץ שנכשל ל"נכשלו",
-כך שאף קובץ לא מסוכם פעמיים.
+משימה מתוזמנת של Windows מפעילה כל חצי שעה, בין 08:00 ל-22:00, את MeetingSummaryWatch.exe --watch (בלי חלון).
+כל הרצה בודקת את התיקייה פעם אחת ומסתיימת. רק הקלטה חדשה מסוכמת; הקלטה שכבר סוכמה (לפי תוכן הקובץ)
+לא מסוכמת שוב. אחרי הסיכום, או כשההקלטה כבר סוכמה, קובץ השמע עובר לתת-תיקייה "קבצים שנמחקו".
+קובץ שנכשל עובר ל"נכשלו". על כל סיכום חדש נשלח מייל אחד שכותרתו שם הסיכום.
 """
 import datetime
 import os
@@ -13,16 +14,18 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 import app
+import mailer
 import transcribe
 
 WATCH_DIR = app.ONEDRIVE_DIR / "הקלטות לסיכום"
-DONE_DIR = WATCH_DIR / "עובדו"
+DONE_DIR = WATCH_DIR / "קבצים שנמחקו"
+OLD_DONE_DIR = WATCH_DIR / "עובדו"  # גרסה 2.7
 FAILED_DIR = WATCH_DIR / "נכשלו"
 LOG = app.DATA / "watch.log"
 LOCK = app.DATA / "watch.lock"
 LOGIN_ALERT = app.DATA / "login_alert"  # מונע התראה חוזרת כל כמה דקות כש-Claude לא מחובר
 TASK_NAME = "MeetingSummary OneDrive Watch"
-INTERVAL_MIN = 5
+FIRST_RUN, INTERVAL, WINDOW = "08:00:00", "PT30M", "PT14H1M"  # כל חצי שעה מ-08:00 עד 22:00 (כולל)
 BACKGROUND_EXT = {".txt", ".docx", ".pdf"}
 
 
@@ -83,22 +86,53 @@ def claude_ready():
     return None
 
 
+def migrate_old_done():
+    # גרסה 2.7 העבירה הקלטות שסוכמו ל"עובדו": רושמים אותן כמסוכמות ומעבירים ל"קבצים שנמחקו"
+    if not OLD_DONE_DIR.is_dir():
+        return
+    for f in OLD_DONE_DIR.iterdir():
+        if f.is_file() and f.suffix.lower() in app.AUDIO_EXT and not app.already_done(f):
+            app.remember(f, "(סוכם בגרסה 2.7)")
+        move([f], DONE_DIR)
+    if not any(OLD_DONE_DIR.iterdir()):
+        OLD_DONE_DIR.rmdir()
+
+
+def send_email(doc_name):
+    try:
+        if mailer.send_subject(Path(doc_name).stem):
+            log(f"נשלח מייל: {Path(doc_name).stem}")
+    except Exception as e:
+        log(f"שליחת המייל נכשלה: {e}")
+
+
 def check_folder():
     WATCH_DIR.mkdir(parents=True, exist_ok=True)
+    migrate_old_done()
     audios = ready_files()
     if not audios:
         return
     log(f"נמצאו {len(audios)} הקלטות: {', '.join(f.name for f in audios)}")
+    new = []
+    for audio in audios:
+        if app.already_done(audio):
+            log(f"כבר סוכם - לא מסוכם שוב: {audio.name}")
+            move([audio, *background_for(audio)], DONE_DIR)
+        else:
+            new.append(audio)
+    if not new:
+        return
     claude = claude_ready()
     if not claude:
         return
-    for audio in audios:
+    for audio in new:
         bg_files = background_for(audio)
         try:
             background = [(f.name, app.read_background(f)) for f in bg_files]
             usage = app.process(claude, audio, background)
             move([audio, *bg_files], DONE_DIR)
             log(f"הסתיים: {audio.name} ({usage['total']:,} טוקנים, ${usage['cost_usd']:.4f})")
+            send_email(usage["doc"])
         except Exception as e:
             log(f"שגיאה בעיבוד {audio.name}: {e}")
             move([audio, *bg_files], FAILED_DIR)
@@ -106,17 +140,18 @@ def check_folder():
 
 
 def task_xml(exe):
-    start = datetime.datetime.now().replace(microsecond=0).isoformat()
+    start = f"{datetime.date.today().isoformat()}T{FIRST_RUN}"
     user = f"{os.environ.get('USERDOMAIN', '')}\\{os.environ.get('USERNAME', '')}".lstrip("\\")
     return f"""<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>מסכם הישיבות: סיכום אוטומטי של הקלטות מתיקיית OneDrive</Description></RegistrationInfo>
   <Triggers>
-    <TimeTrigger>
+    <CalendarTrigger>
       <StartBoundary>{start}</StartBoundary>
       <Enabled>true</Enabled>
-      <Repetition><Interval>PT{INTERVAL_MIN}M</Interval><StopAtDurationEnd>false</StopAtDurationEnd></Repetition>
-    </TimeTrigger>
+      <Repetition><Interval>{INTERVAL}</Interval><Duration>{WINDOW}</Duration><StopAtDurationEnd>false</StopAtDurationEnd></Repetition>
+      <ScheduleByDay><DaysInterval>1</DaysInterval></ScheduleByDay>
+    </CalendarTrigger>
   </Triggers>
   <Principals>
     <Principal id="Author"><UserId>{escape(user)}</UserId><LogonType>InteractiveToken</LogonType><RunLevel>LeastPrivilege</RunLevel></Principal>

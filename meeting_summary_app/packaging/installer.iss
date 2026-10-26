@@ -33,7 +33,7 @@ UninstallDisplayName={#MyAppName}
 Name: "hebrew"; MessagesFile: "compiler:Languages\Hebrew.isl"
 
 [Tasks]
-Name: "watch"; Description: "סיכום אוטומטי של הקלטות שמועלות לתיקייה ב-OneDrive (סיכומי ישיבות\הקלטות לסיכום), בדיקה כל 5 דקות"
+Name: "watch"; Description: "סיכום אוטומטי של הקלטות שמועלות לתיקייה ב-OneDrive (סיכומי ישיבות\הקלטות לסיכום), בדיקה כל חצי שעה בין 08:00 ל-22:00"
 
 [Files]
 Source: "..\מה כלול בגרסה.txt"; DestDir: "{app}"; Flags: ignoreversion
