@@ -1,0 +1,139 @@
+<!-- ===== מחשבון הלוואה – Tharros | ניתן להדבקה כבלוק HTML ===== -->
+<!-- הגדרות: כתובת הלוגו וצבע המותג – לשנות כאן בלבד -->
+<div id="tharros-loan-calc" dir="rtl" lang="he"
+     data-logo="LOGO_URL_HERE"
+     data-logo-link="https://tharros.co.il/">
+<style>
+#tharros-loan-calc{--tlc-primary:#1f3a5f;--tlc-accent:#c9a227;--tlc-bg:#ffffff;--tlc-soft:#f3f5f8;--tlc-text:#1d2433;--tlc-muted:#5d6678;--tlc-border:#d9dee6;
+  direction:rtl;text-align:right;font-family:"Assistant","Heebo","Rubik",Arial,sans-serif;color:var(--tlc-text);background:var(--tlc-bg);
+  max-width:920px;margin:0 auto;padding:24px 16px;box-sizing:border-box;line-height:1.5}
+#tharros-loan-calc *{box-sizing:border-box}
+#tharros-loan-calc .tlc-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;border-bottom:3px solid var(--tlc-accent);padding-bottom:12px;margin-bottom:20px}
+#tharros-loan-calc .tlc-logo{max-height:64px;max-width:200px;display:block}
+#tharros-loan-calc .tlc-logo[hidden]{display:none}
+#tharros-loan-calc h2{margin:0;font-size:1.6em;color:var(--tlc-primary)}
+#tharros-loan-calc .tlc-sub{margin:4px 0 0;color:var(--tlc-muted);font-size:.95em}
+#tharros-loan-calc .tlc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+#tharros-loan-calc .tlc-card{background:var(--tlc-soft);border:1px solid var(--tlc-border);border-radius:10px;padding:16px}
+#tharros-loan-calc label{display:block;font-weight:700;margin-bottom:6px}
+#tharros-loan-calc .tlc-row{display:flex;gap:8px;align-items:center}
+#tharros-loan-calc input[type=number],#tharros-loan-calc select{width:100%;padding:10px;border:1px solid var(--tlc-border);border-radius:6px;font:inherit;background:#fff;color:inherit;text-align:right}
+#tharros-loan-calc input[type=range]{width:100%;accent-color:var(--tlc-primary);margin-top:8px;direction:rtl}
+#tharros-loan-calc .tlc-unit{color:var(--tlc-muted);white-space:nowrap}
+#tharros-loan-calc .tlc-res{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:20px}
+#tharros-loan-calc .tlc-kpi{background:var(--tlc-primary);color:#fff;border-radius:10px;padding:14px;text-align:center}
+#tharros-loan-calc .tlc-kpi span{display:block;font-size:.9em;opacity:.85}
+#tharros-loan-calc .tlc-kpi b{display:block;font-size:1.45em;margin-top:4px;direction:ltr;unicode-bidi:isolate}
+#tharros-loan-calc .tlc-kpi.alt{background:var(--tlc-accent);color:#1d2433}
+#tharros-loan-calc .tlc-bar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:18px 0 6px;border:1px solid var(--tlc-border)}
+#tharros-loan-calc .tlc-bar i{display:block;height:100%}
+#tharros-loan-calc .tlc-legend{display:flex;gap:18px;font-size:.9em;color:var(--tlc-muted);flex-wrap:wrap}
+#tharros-loan-calc .tlc-legend em{display:inline-block;width:12px;height:12px;border-radius:2px;margin-left:6px;vertical-align:middle}
+#tharros-loan-calc .tlc-btn{background:none;border:1px solid var(--tlc-primary);color:var(--tlc-primary);padding:8px 14px;border-radius:6px;cursor:pointer;font:inherit;margin-top:18px}
+#tharros-loan-calc .tlc-tablewrap{max-height:420px;overflow:auto;margin-top:12px;border:1px solid var(--tlc-border);border-radius:8px}
+#tharros-loan-calc table{width:100%;border-collapse:collapse;direction:rtl;font-size:.92em}
+#tharros-loan-calc th,#tharros-loan-calc td{padding:8px;border-bottom:1px solid var(--tlc-border);text-align:right;white-space:nowrap}
+#tharros-loan-calc th{background:var(--tlc-primary);color:#fff;position:sticky;top:0}
+#tharros-loan-calc tr:nth-child(even) td{background:var(--tlc-soft)}
+#tharros-loan-calc .tlc-err{color:#b3261e;font-weight:700;margin-top:10px;min-height:1.2em}
+#tharros-loan-calc .tlc-note{color:var(--tlc-muted);font-size:.82em;margin-top:16px}
+</style>
+
+<div class="tlc-head">
+  <a class="tlc-logo-link" target="_blank" rel="noopener"><img class="tlc-logo" alt="Tharros" hidden></a>
+  <div><h2>מחשבון הלוואה</h2><p class="tlc-sub">חישוב החזר חודשי, סך הריבית ולוח סילוקין מלא</p></div>
+</div>
+
+<div class="tlc-grid">
+  <div class="tlc-card">
+    <label for="tlc-amount">סכום ההלוואה</label>
+    <div class="tlc-row"><input id="tlc-amount" type="number" min="1000" max="5000000" step="1000" value="100000"><span class="tlc-unit">₪</span></div>
+    <input id="tlc-amount-r" type="range" min="1000" max="2000000" step="1000" value="100000" aria-label="סכום ההלוואה">
+  </div>
+  <div class="tlc-card">
+    <label for="tlc-rate">ריבית שנתית</label>
+    <div class="tlc-row"><input id="tlc-rate" type="number" min="0" max="30" step="0.05" value="6"><span class="tlc-unit">%</span></div>
+    <input id="tlc-rate-r" type="range" min="0" max="20" step="0.05" value="6" aria-label="ריבית שנתית">
+  </div>
+  <div class="tlc-card">
+    <label for="tlc-months">תקופת ההלוואה</label>
+    <div class="tlc-row"><input id="tlc-months" type="number" min="1" max="360" step="1" value="60"><span class="tlc-unit">חודשים</span></div>
+    <input id="tlc-months-r" type="range" min="1" max="360" step="1" value="60" aria-label="תקופת ההלוואה">
+  </div>
+  <div class="tlc-card">
+    <label for="tlc-method">שיטת ההחזר</label>
+    <select id="tlc-method">
+      <option value="spitzer">שפיצר – החזר חודשי קבוע</option>
+      <option value="equal">קרן שווה – החזר קרן קבוע</option>
+      <option value="balloon">בלון – ריבית חודשית, קרן בסוף התקופה</option>
+    </select>
+    <label for="tlc-grace" style="margin-top:12px">גרייס – ריבית בלבד</label>
+    <div class="tlc-row"><input id="tlc-grace" type="number" min="0" max="60" step="1" value="0"><span class="tlc-unit">חודשים</span></div>
+  </div>
+</div>
+<div class="tlc-err" role="alert"></div>
+
+<div class="tlc-res" aria-live="polite">
+  <div class="tlc-kpi"><span class="tlc-l-pay">החזר חודשי</span><b id="tlc-pay">—</b></div>
+  <div class="tlc-kpi"><span>סך תשלומי ריבית</span><b id="tlc-int">—</b></div>
+  <div class="tlc-kpi alt"><span>סך כל ההחזר</span><b id="tlc-tot">—</b></div>
+</div>
+<div class="tlc-bar"><i id="tlc-bp" style="background:var(--tlc-primary)"></i><i id="tlc-bi" style="background:var(--tlc-accent)"></i></div>
+<div class="tlc-legend"><span><em style="background:var(--tlc-primary)"></em>קרן <b id="tlc-pp"></b></span><span><em style="background:var(--tlc-accent)"></em>ריבית <b id="tlc-ip"></b></span></div>
+
+<button type="button" class="tlc-btn" aria-expanded="false">הצג לוח סילוקין</button>
+<div class="tlc-tablewrap" hidden>
+  <table><thead><tr><th>חודש</th><th>יתרת פתיחה</th><th>תשלום חודשי</th><th>קרן</th><th>ריבית</th><th>יתרת סגירה</th></tr></thead><tbody></tbody></table>
+</div>
+<p class="tlc-note">החישוב הוא הערכה בלבד, בריבית קבועה ולא צמודה, ואינו מהווה הצעה לקבלת אשראי. התנאים בפועל נקבעים על ידי הגוף המלווה. אי עמידה בפירעון ההלוואה עלולה לגרור חיוב בריבית פיגורים והליכי הוצאה לפועל.</p>
+
+<script>
+(function(){
+  var root=document.getElementById('tharros-loan-calc'); if(!root||root.dataset.ready)return; root.dataset.ready='1';
+  var $=function(s){return root.querySelector(s)};
+  var logo=root.dataset.logo, img=$('.tlc-logo');
+  if(logo&&logo.indexOf('LOGO_URL')<0){img.src=logo;img.hidden=false;$('.tlc-logo-link').href=root.dataset.logoLink||'#';}
+  var nf=new Intl.NumberFormat('he-IL',{style:'currency',currency:'ILS',maximumFractionDigits:0});
+  var nf2=new Intl.NumberFormat('he-IL',{minimumFractionDigits:2,maximumFractionDigits:2});
+  function pair(a,b){var A=$(a),B=$(b);A.addEventListener('input',function(){B.value=A.value;calc()});B.addEventListener('input',function(){A.value=B.value;calc()});}
+  pair('#tlc-amount','#tlc-amount-r');pair('#tlc-rate','#tlc-rate-r');pair('#tlc-months','#tlc-months-r');
+  $('#tlc-method').addEventListener('change',calc);$('#tlc-grace').addEventListener('input',calc);
+  var btn=$('.tlc-btn'),wrap=$('.tlc-tablewrap');
+  btn.addEventListener('click',function(){var o=wrap.hidden;wrap.hidden=!o;btn.textContent=o?'הסתר לוח סילוקין':'הצג לוח סילוקין';btn.setAttribute('aria-expanded',o)});
+
+  function schedule(L,annual,n,method,grace){
+    var r=annual/100/12,rows=[],bal=L,m=n-grace;
+    for(var k=1;k<=n;k++){
+      var interest=bal*r,principal;
+      if(k<=grace||method==='balloon') principal=(k===n)?bal:0;
+      else if(method==='equal') principal=L/m;
+      else { var left=n-k+1; principal=(r===0?bal/left:bal*r/(1-Math.pow(1+r,-left)))-interest; }
+      if(k===n) principal=bal;
+      rows.push([k,bal,principal+interest,principal,interest,bal-principal]); bal-=principal;
+    }
+    return rows;
+  }
+  function calc(){
+    var L=+$('#tlc-amount').value,R=+$('#tlc-rate').value,n=Math.round(+$('#tlc-months').value),g=Math.round(+$('#tlc-grace').value||0),meth=$('#tlc-method').value,err=$('.tlc-err');
+    var msg='';
+    if(!(L>0))msg='יש להזין סכום הלוואה חיובי.';
+    else if(!(R>=0&&R<=30))msg='יש להזין ריבית שנתית בין 0% ל-30%.';
+    else if(!(n>=1&&n<=360))msg='יש להזין תקופה בין 1 ל-360 חודשים.';
+    else if(g<0||g>=n)msg='תקופת הגרייס חייבת להיות קצרה מתקופת ההלוואה.';
+    err.textContent=msg; if(msg){['#tlc-pay','#tlc-int','#tlc-tot'].forEach(function(s){$(s).textContent='—'});return;}
+    var rows=schedule(L,R,n,meth,g),ti=0,tp=0;rows.forEach(function(x){ti+=x[4];tp+=x[2]});
+    var first=rows[Math.min(g,n-1)][2], last=rows[n-1][2], lbl=$('.tlc-l-pay');
+    if(meth==='balloon'){lbl.textContent='החזר חודשי (ריבית בלבד)';$('#tlc-pay').textContent=nf.format(rows[0][2]);}
+    else if(meth==='equal'){lbl.textContent='החזר ראשון / אחרון';$('#tlc-pay').textContent=nf.format(first)+' / '+nf.format(last);}
+    else {lbl.textContent=g>0?'החזר חודשי (לאחר הגרייס)':'החזר חודשי';$('#tlc-pay').textContent=nf.format(first);}
+    $('#tlc-int').textContent=nf.format(ti);$('#tlc-tot').textContent=nf.format(tp);
+    var pp=tp?L/tp*100:100;$('#tlc-bp').style.width=pp+'%';$('#tlc-bi').style.width=(100-pp)+'%';
+    $('#tlc-pp').textContent=Math.round(pp)+'%';$('#tlc-ip').textContent=Math.round(100-pp)+'%';
+    var h='';rows.forEach(function(x){h+='<tr><td>'+x[0]+'</td><td>'+nf2.format(x[1])+'</td><td>'+nf2.format(x[2])+'</td><td>'+nf2.format(x[3])+'</td><td>'+nf2.format(x[4])+'</td><td>'+nf2.format(Math.abs(x[5])<0.005?0:x[5])+'</td></tr>'});
+    $('tbody').innerHTML=h;
+  }
+  calc();
+})();
+</script>
+</div>
+<!-- ===== סוף מחשבון הלוואה ===== -->
